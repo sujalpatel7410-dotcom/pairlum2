@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>You’re invited — Pairlum</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#4A1226">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;1,6..96,400&family=IBM+Plex+Mono:wght@500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="pairlum-core.css">
+<script src="pairlum-config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+<script src="pairlum-core.js"></script>
+<style>
+main{max-width:760px;margin:0 auto;padding:0 var(--pad) 40px}
+main:focus{outline:none}
+.codeform{display:flex;gap:10px;flex-wrap:wrap;margin-top:24px;max-width:460px}
+.codeform .in{flex:1;min-width:200px;font:500 1.1rem var(--font-mono);letter-spacing:.06em;text-transform:uppercase}
+.checking{display:flex;align-items:center;gap:12px;margin-top:22px;color:var(--muted)}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="pl-top"><a class="pl-wordmark" href="index.html" aria-label="Pairlum home">Pairlum</a><nav aria-label="Account" id="nav"></nav></header>
+<main id="main" tabindex="-1"></main>
+<footer class="pl-foot"><a href="legal.html#privacy">Privacy</a><a href="legal.html#terms">Terms</a><span>Pairlum is for adults 18+.</span></footer>
+<script>
+(function(){
+var h=PL.h,$=PL.$,main=$('#main');
+var code=(PL.param('code')||'').trim().toUpperCase();
+var sess=PL.auth.session();
+$('#nav').append(sess?h('a',{href:PL.home()},'Open Pairlum'):h('a',{href:'auth.html?next='+encodeURIComponent('join.html'+(code?'?code='+code:''))+'#login'},'Log in'));
+
+function stateView(o){
+  main.replaceChildren(h('section',{class:'pl-state','aria-labelledby':'st'},h('span',{class:'pl-mono'},o.label),
+    h('h1',{class:'st-big',id:'st',tabindex:'-1',html:o.big}),o.sub?h('p',{class:'st-sub'},o.sub):null,o.extra||null,
+    o.acts&&o.acts.length?h('div',{class:'st-act'},o.acts):null));
+  document.title=o.label+' — Pairlum';$('#st').focus({preventScroll:true});
+}
+function nextJoin(){return encodeURIComponent('join.html?code='+code)}
+var VIEWS={
+  ask:function(msg){
+    var inp=h('input',{class:'in',id:'code',value:code,placeholder:'PAIR-XXXXXX',autocomplete:'off',autocapitalize:'characters',spellcheck:'false','aria-describedby':'code-e'});
+    var err=h('span',{class:'err',id:'code-e','aria-live':'polite',style:'display:block;margin-top:8px;color:var(--danger);font-size:.9rem'},msg||'');
+    var f=h('form',{class:'codeform',novalidate:true},h('label',{for:'code',class:'vh'},'Invite code'),inp,h('button',{class:'btn',type:'submit'},'Continue'));
+    f.addEventListener('submit',function(e){e.preventDefault();var v=inp.value.trim().toUpperCase();
+      if(!PL.invites.validFormat(v)){err.textContent='That code doesn’t look right. It starts with PAIR- followed by letters and numbers.';inp.setAttribute('aria-invalid','true');inp.focus();return}
+      location.search='?code='+encodeURIComponent(v)});
+    stateView({label:'Join your person',big:'<em>Have</em> an invite?',sub:'Paste the code or open the link your person sent you.',extra:h('div',null,f,err)});
+  },
+  checking:function(){stateView({label:'Invite',big:'<em>Checking</em> your invite…',extra:h('p',{class:'checking',role:'status'},h('span',{class:'spin','aria-hidden':'true'}),'One moment.')})},
+  valid:function(name){
+    name=name||'Your person';
+    var acts=sess?[h('button',{class:'btn',type:'button',onclick:accept},'Join '+name+'’s space')]
+      :[h('a',{class:'btn',href:'auth.html?next='+nextJoin()+'#signup'},'Create your account'),h('a',{class:'link',href:'auth.html?next='+nextJoin()+'#login'},'I already have one')];
+    stateView({label:'You’re invited',big:'<em>'+PL.esc(name)+'</em> made a space for the two of you.',sub:'A private world just for you two. No public profile, no followers, no likes. You’ll have your own account and your own login.',acts:acts});
+  },
+  accepting:function(){stateView({label:'Joining',big:'<em>Joining</em> your space…',extra:h('p',{class:'checking',role:'status'},h('span',{class:'spin','aria-hidden':'true'}),'Connecting the two of you.')})},
+  connected:function(name){
+    name=name||'your person';
+    stateView({label:'Connected',big:'<em>You’re</em> in.',sub:'You and '+name+' now share one space. Anything either of you adds shows up for the other.',
+      acts:[h('a',{class:'btn',href:'world.html'},'Enter Our World')]});
+  },
+  invalid:function(){stateView({label:'Invite not found',big:'<em>This</em> invite doesn’t work.',sub:'The code may be mistyped, or the invite may have been replaced with a newer one. Ask your person to send it again.',
+    acts:[h('button',{class:'btn ghost',type:'button',onclick:function(){VIEWS.ask()}},'Enter a code')]})},
+  expired:function(){stateView({label:'Invite expired',big:'<em>This</em> invite has expired.',sub:'Invites only work for a limited time, to keep your space private. Ask your person to send a fresh link.',
+    acts:[h('a',{class:'btn ghost',href:'index.html'},'Back to Pairlum')]})},
+  already_connected:function(){stateView({label:'Already connected',big:'<em>You’re</em> already in this space.',sub:'This invite is for the space you already share. Nothing more to do.',
+    acts:[h('a',{class:'btn',href:'world.html'},'Open Our World')]})},
+  space_full:function(){stateView({label:'Space is full',big:'<em>This</em> space already has two people.',sub:'A Pairlum space is for exactly two. If this is unexpected, ask the person who sent the link.',
+    acts:[h('a',{class:'btn ghost',href:'index.html'},'Back to Pairlum')]})},
+  own:function(){stateView({label:'Your own invite',big:'<em>This</em> is the invite you made.',sub:'Send it to your person. When they open it on their phone, they’ll join your space.',
+    acts:[h('a',{class:'btn',href:'world.html'},'Back to Our World')]})},
+  offline:function(){stateView({label:'Offline',big:'<em>You’re</em> offline.',sub:'We need a connection to check your invite. Your link will still work once you’re back online.',acts:[h('button',{class:'btn',type:'button',onclick:function(){start()}},'Try again')]})},
+  pending:function(){stateView({label:'Not connected yet',big:'<em>Invites</em> can’t be checked just yet.',sub:'Pairlum invites start working when accounts are connected. Keep this link; it will work then. Nothing about your invite has been shared.',
+    extra:h('p',{class:'pl-pending',style:'margin-top:20px'},'Invite verification needs the connected backend'),acts:[h('a',{class:'btn ghost',href:'index.html'},'Back to Pairlum')]})},
+  error:function(){stateView({label:'Something went wrong',big:'<em>We</em> couldn’t check this invite.',sub:'Please try again in a moment.',acts:[h('button',{class:'btn',type:'button',onclick:function(){start()}},'Try again')]})}
+};
+function route(res){var st=res&&res.status;if(VIEWS[st])VIEWS[st](res.inviterName);else VIEWS.error()}
+function accept(){VIEWS.accepting();
+  PL.invites.accept(code).then(function(res){PL.track('partner_joined',{});VIEWS.connected(res&&res.inviterName)},
+    function(e){if(PL.isPending(e))VIEWS.pending();else if(e&&e.code==='offline')VIEWS.offline();else if(e&&VIEWS[e.code])VIEWS[e.code]();else VIEWS.error()})}
+function start(){
+  var q=PL.qa.state;
+  if(q){if(q==='valid')return VIEWS.valid('Nishi');if(q==='connected')return VIEWS.connected('Nishi');if(VIEWS[q])return VIEWS[q]()}
+  if(!code)return VIEWS.ask();
+  var mine=PL.space.get();if(mine&&mine.inviteCode===code)return VIEWS.own();
+  VIEWS.checking();
+  PL.invites.lookup(code).then(route,function(e){if(PL.isPending(e))VIEWS.pending();else if(e&&e.code==='offline')VIEWS.offline();else VIEWS.error()});
+}
+start();
+})();
+</script>
+</body>
+</html>

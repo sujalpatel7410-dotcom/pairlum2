@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pairlum — Our DNA</title>
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#4A1226">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;1,6..96,400&family=IBM+Plex+Mono:wght@500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="pairlum-core.css">
+<script src="pairlum-core.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);line-height:1.5}
+h1,h2,h3{font-family:var(--display);font-weight:400;letter-spacing:-.035em;margin:0}
+[hidden]{display:none!important}
+.app{max-width:640px;margin:0 auto;padding:14px var(--pad) 60px}
+.top{display:flex;align-items:center;gap:12px;padding:6px 0 14px}
+.back{width:38px;height:38px;border-radius:50%;border:1.5px solid var(--ink);background:none;color:var(--ink)}
+.tabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:16px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:none;height:36px;padding:0 14px;border-radius:99px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);font:600 .82rem var(--body)}
+.tabs button[aria-selected=true]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.hero{padding:20px;border-radius:22px;background:linear-gradient(155deg,var(--g1),var(--g2) 55%,var(--g3));color:var(--gtext);margin-bottom:18px}
+.hero p{margin:6px 0 0;opacity:.9;font-size:.95rem;font-family:var(--display);font-size:1.1rem;letter-spacing:-.01em}
+.card{background:var(--card);border:1.5px solid var(--line);border-radius:20px;padding:16px 18px;margin-bottom:16px}
+.card>h3{font-size:1rem;margin-bottom:2px}
+.card>.gd{opacity:.65;font-size:.85rem;margin-bottom:10px}
+.spec{margin-bottom:18px}
+.spec .lbl{display:flex;justify-content:space-between;font-size:.8rem;opacity:.75;margin-bottom:6px}
+.spec .track{position:relative;height:6px;border-radius:99px;background:var(--line)}
+.spec .fillMe,.spec .fillP{position:absolute;top:-5px;width:16px;height:16px;border-radius:50%;transform:translateX(-50%)}
+.spec .fillMe{background:var(--accent);z-index:2}
+.spec .fillP{background:var(--gold);opacity:.85}
+.spec input[type=range]{width:100%;margin-top:8px;-webkit-appearance:none;height:6px;background:transparent}
+.spec input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);margin-top:-5px}
+.legend{display:flex;gap:14px;font-size:.78rem;opacity:.75;margin-bottom:10px}
+.legend b{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
+.dna-text{padding:16px;border-radius:16px;background:linear-gradient(155deg,var(--g2),var(--g3));color:var(--gtext);font:600 1.05rem/1.35 var(--display)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{height:34px;padding:0 14px;border-radius:99px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);font:inherit;font-size:.82rem}
+.chip[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.chip.x{display:inline-flex;align-items:center;gap:6px}
+.chip.x span{opacity:.6}
+.addrow{display:flex;gap:8px;margin:10px 0}
+.in{flex:1;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);border-radius:12px;padding:9px 12px;font:inherit}
+.pill{height:36px;padding:0 16px;border:0;border-radius:99px;background:var(--accent);color:var(--on-accent);font:600 .85rem var(--body)}
+.pill.ghost{background:none;border:1.5px solid var(--line);color:var(--ink)}
+.pill.sm{height:32px;padding:0 12px;font-size:.78rem}
+.cat h4{margin:14px 0 6px;font-size:.85rem;opacity:.7;text-transform:uppercase;letter-spacing:.05em}
+.suggest{padding:14px 16px;border-radius:16px;background:var(--bg);border:1.5px dashed var(--ink);margin-bottom:12px}
+.priolist{list-style:none;margin:0;padding:0;counter-reset:p}
+.priolist li{counter-increment:p;display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.priolist li:first-child{border-top:0}
+.priolist li::before{content:counter(p);width:22px;height:22px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-size:.75rem;flex:none}
+.season{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.season button{padding:14px 10px;border-radius:16px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);text-align:left;font:inherit;font-size:.85rem}
+.season button[aria-pressed=true]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--bg))}
+.mlrow{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px}
+.col{display:flex;gap:2px;height:3px;border-radius:99px;overflow:hidden;background:var(--line);margin-top:6px}
+.col i{display:block;height:100%}
+.toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,10px);opacity:0;pointer-events:none;background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:99px;font-size:.88rem;transition:opacity .3s,transform .3s;z-index:60}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top"><a class="back" href="settings.html" aria-label="Back to Settings">←</a><h1 style="font-size:1.25rem">Our DNA</h1></div>
+  <div class="hero"><small style="opacity:.85">The personalization layer</small><p id="dnaLine"></p></div>
+  <div class="tabs" id="tabs"></div>
+  <div id="panel"></div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function(){
+if(!PL.requireSession())return;
+var $=function(s,r){return (r||document).querySelector(s)};
+function h(t,a){var e=document.createElement(t),k=[].slice.call(arguments,2);
+  for(var n in (a||{})){var v=a[n];if(n==='class')e.className=v;else if(n==='text')e.textContent=v;
+    else if(n.indexOf('on')===0)e.addEventListener(n.slice(2),v);else if(v!==false&&v!=null)e.setAttribute(n,v)}
+  k.forEach(function(c){if(c!=null)e.append(c.nodeType?c:document.createTextNode(c))});return e}
+function toast(t){var el=$('#toast');el.textContent=t;el.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(function(){el.classList.remove('on')},2400)}
+function rnd(a){return a[Math.floor(Math.random()*a.length)]}
+
+var KEY='pl-dna';
+var SPECS=[['social','Introvert','Social'],['tone','Calm','Playful'],['romance','Casual','Romantic'],['plan','Spontaneous','Planned'],
+ ['expressive','Private','Expressive'],['calls','Short check-ins','Long calls'],['depth','Silly moments','Deep conversations'],['freq','Low-pressure','Frequent interaction']];
+var THING_CATS=['Songs','Movies/shows','Foods','Places','Games','Artists','Sports','Hobbies','Travel styles','Date types','Favorite memories','Things to try'];
+var WORLD_OPTS=['Memories','Distance','Letters','Plans','Photos','Voice','Rituals','Dates','Music','Travel','Everyday moments'];
+var SEASONS=['New Us','Long Distance','Busy Life','Reconnecting','Living Together','Planning Reunion','Travelling','Just Us','Big Change'];
+var D={
+ me:{},partner:{},
+ loveLang:[],mediaPref:[],
+ things:{},
+ language:{nicknames:[],jokes:[],words:[],phrases:[],emojis:[],goodbye:'',morning:[]},
+ priorities:[],
+ rituals:[],
+ collections:[],
+ vibe:{mood:'warm',photoHeavy:60,playful:55,motion:60,ambient:true,density:50,textSize:'md',arrangement:'single'},
+ season:'',
+ fb:{}
+};
+SPECS.forEach(function(s){D.me[s[0]]=50;D.partner[s[0]]=50});
+THING_CATS.forEach(function(c){D.things[c]=[]});
+
+var S;try{S=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){S=null}
+if(!S)S=D;else{['me','partner','things','language','vibe','fb'].forEach(function(k){S[k]=Object.assign({},D[k],S[k])});}
+/* Remove the sample couple earlier builds seeded into this browser; keep anything the couple added. */
+(function(){
+  if(S.demoCleared)return;
+  var demo={nicknames:['Panda'],jokes:['The great potato incident'],words:['Yeet'],phrases:['Text me when you land'],emojis:['🐼','🌙'],morning:['Good morning, sunshine']};
+  Object.keys(demo).forEach(function(k){if(Array.isArray(S.language[k]))S.language[k]=S.language[k].filter(function(v){return demo[k].indexOf(v)<0})});
+  if(S.language.goodbye==='Talk soon, panda')S.language.goodbye='';
+  var dt={'Songs':'Night drive playlist','Foods':'Ramen','Games':'F1','Artists':'Tame Impala'};
+  Object.keys(dt).forEach(function(c){if(Array.isArray(S.things[c]))S.things[c]=S.things[c].filter(function(v){return v!==dt[c]})});
+  S.collections=(S.collections||[]).filter(function(c){return !((c.name==='Bad photos'&&c.count===14)||(c.name==='Airport goodbyes'&&c.count===6))});
+  S.rituals=(S.rituals||[]).filter(function(r){return r.name!=='Airport photo every reunion'});
+  var pd={social:70,tone:65,romance:55,plan:25,expressive:40,calls:35,depth:45,freq:60};
+  if(Object.keys(pd).every(function(k){return S.partner[k]===pd[k]})){S.partner=Object.assign({},D.partner)}
+  var md={social:35,tone:45,romance:70,plan:40,expressive:55,calls:70,depth:60,freq:45};
+  if(Object.keys(md).every(function(k){return S.me[k]===md[k]})){S.me=Object.assign({},D.me)}
+  S.demoCleared=true;save();
+})();
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+
+/* ---------- DNA narrative ---------- */
+function dnaLine(){
+  var avg=function(k){return (S.me[k]+S.partner[k])/2};
+  var bits=[];
+  bits.push(avg('social')>55?'social when together':'quiet and close');
+  bits.push(avg('plan')>55?'plans ahead':'says yes on a whim');
+  bits.push(avg('depth')>55?'talks deep, often':'keeps it light and easy');
+  bits.push(Math.abs(S.me.calls-S.partner.calls)>25?'one loves long calls, one keeps it short':'matched on how you check in');
+  return 'This is how your relationship moves: '+bits.join(', ')+'.';
+}
+function renderHero(){$('#dnaLine').textContent=dnaLine()}
+
+/* ---------- reusable pieces ---------- */
+function specRow(s){
+  var key=s[0];
+  var lbl=h('div',{class:'lbl'},h('span',null,s[1]),h('span',null,s[2]));
+  var track=h('div',{class:'track'});
+  var fm=h('div',{class:'fillMe',style:'left:'+S.me[key]+'%'}),fp=h('div',{class:'fillP',style:'left:'+S.partner[key]+'%'});
+  track.append(fp,fm);
+  var r=h('input',{type:'range',min:'0',max:'100',value:S.me[key]});
+  r.addEventListener('input',function(){S.me[key]=+r.value;fm.style.left=r.value+'%';save();renderHero()});
+  return h('div',{class:'spec'},lbl,track,r);
+}
+function chipToggle(list,label,onToggle){
+  return h('button',{class:'chip',type:'button','aria-pressed':String(list.indexOf(label)>-1),onclick:function(){onToggle();this.setAttribute('aria-pressed',String(list.indexOf(label)>-1))}},label);
+}
+function tagList(catKey,store){
+  var box=h('div',{class:'chips'});
+  function draw(){box.replaceChildren();(store[catKey]||[]).forEach(function(v,i){
+    box.append(h('button',{class:'chip x',type:'button',onclick:function(){store[catKey].splice(i,1);save();draw()}},v,h('span',null,'✕')));
+  })}
+  draw();
+  var inp=h('input',{class:'in',placeholder:'Add '+catKey.toLowerCase()});
+  inp.addEventListener('keydown',function(e){if(e.key==='Enter'&&inp.value.trim()){store[catKey]=store[catKey]||[];store[catKey].push(inp.value.trim());inp.value='';save();draw();if(catKey&&$('#suggestBox'))renderSuggest()}});
+  return h('div',{class:'cat'},h('h4',{text:catKey}),box,h('div',{class:'addrow'},inp));
+}
+function listManager(store,key,ph,onAdd){
+  var box=h('div',{class:'chips'});
+  function draw(){box.replaceChildren();(store[key]||[]).forEach(function(v,i){box.append(h('button',{class:'chip x',type:'button',onclick:function(){store[key].splice(i,1);save();draw()}},v,h('span',null,'✕')))})}
+  draw();
+  var inp=h('input',{class:'in',placeholder:ph});
+  inp.addEventListener('keydown',function(e){if(e.key==='Enter'&&inp.value.trim()){store[key].push(inp.value.trim());inp.value='';save();draw();if(onAdd)onAdd()}});
+  return h('div',null,box,h('div',{class:'addrow'},inp));
+}
+
+/* ---------- suggestions from Things + Language ---------- */
+function allThings(){var out=[];Object.keys(S.things).forEach(function(k){(S.things[k]||[]).forEach(function(v){out.push(v)})});return out}
+function renderSuggest(){
+  var t=allThings(),el=$('#suggestBox');if(!el)return;el.replaceChildren();
+  if(t.length<2){el.append(h('div',{class:'suggest'},'Add a few things you both love — Pairlum will start suggesting from them.'));return}
+  var a=rnd(t),b=rnd(t.filter(function(x){return x!==a}))||a;
+  el.append(h('div',{class:'suggest'},'Tonight: send them the '+a.toLowerCase()+' that reminds you of '+b.toLowerCase()+'.'));
+  if(S.language.phrases.length){var p=rnd(S.language.phrases);el.append(h('div',{class:'suggest'},'A resurfaced memory might read: "The day '+ (S.language.words[0]||p) +' became a whole love language."'))}
+}
+
+/* ---------- World priorities ---------- */
+var CARD_MAP={'Memories':'Replay','Distance':'Their Side + local time','Letters':'Open When','Plans':'Our Plans','Photos':'Drop Something · Photo',
+ 'Voice':'I Need You · Voice','Rituals':'Our Ritual','Dates':'Date ideas','Music':'Shared playlist','Travel':'Future trips','Everyday moments':'Two Worlds'};
+function worldTab(){
+  var chips=h('div',{class:'chips'});
+  var list=h('ul',{class:'priolist'});
+  function drawList(){list.replaceChildren();S.priorities.forEach(function(p){list.append(h('li',null,CARD_MAP[p]||p))});
+    if(!S.priorities.length)list.append(h('li',{style:'opacity:.6'},'Pick 3–5 things below.'))}
+  function drawChips(){chips.replaceChildren();WORLD_OPTS.forEach(function(o){
+    chips.append(chipToggle(S.priorities,o,function(){
+      var i=S.priorities.indexOf(o);
+      if(i>-1)S.priorities.splice(i,1);else if(S.priorities.length<5)S.priorities.push(o);else{toast('Pick up to 5');return}
+      save();drawList();try{var w=JSON.parse(localStorage.getItem('pl-world')||'{}');w.priorities=S.priorities;localStorage.setItem('pl-world',JSON.stringify(w))}catch(e){}
+    }))})}
+  drawChips();drawList();
+  return h('div',null,h('div',{class:'card'},h('h3',null,'Build Our World'),h('div',{class:'gd'},'Choose 3–5 things your home should emphasize.'),chips),
+    h('div',{class:'card'},h('h3',null,'Your World, reordered'),list));
+}
+
+/* ---------- Learn (more/less) ---------- */
+var LEARN_ITEMS=[['ritual','Sunday ritual prompts'],['deep','Deep-question prompts'],['playful','Playful, silly prompts'],['photo','Photo-based memories'],['music','Song-based moments']];
+function learnTab(){
+  var box=h('div');
+  LEARN_ITEMS.forEach(function(it){
+    var score=S.fb[it[0]]||0,bar=h('div',{class:'col'});
+    function drawBar(){bar.replaceChildren();var pct=Math.max(5,Math.min(100,50+score*10));bar.append(h('i',{style:'width:'+pct+'%;background:var(--accent)'}))}
+    drawBar();
+    box.append(h('div',{class:'card'},h('h3',null,it[1]),bar,
+      h('div',{class:'mlrow'},h('button',{class:'pill ghost sm',type:'button',onclick:function(){S.fb[it[0]]=(S.fb[it[0]]||0)+1;save();drawBar();toast('More of this')}},'More like this'),
+        h('button',{class:'pill ghost sm',type:'button',onclick:function(){S.fb[it[0]]=(S.fb[it[0]]||0)-1;save();drawBar();toast('Less of this')}},'Less like this'))));
+  });
+  return box;
+}
+
+/* ---------- tabs ---------- */
+var TABS=[['dna','DNA'],['things','Things'],['language','Language'],['world','World'],['rituals','Rituals'],['collections','Collections'],['vibe','Vibe'],['learn','Learn'],['season','Season']];
+var cur='dna';
+function panelFor(t){
+  if(t==='dna'){
+    var box=h('div');
+    box.append(h('div',{class:'card'},h('h3',null,'Your DNA, side by side'),h('div',{class:'legend'},h('span',null,h('b',{style:'background:var(--accent)'}),'You'),h('span',null,h('b',{style:'background:var(--gold)'}),'Them')),
+      SPECS.map(specRow).reduce(function(a,r){a.append(r);return a},h('div'))));
+    box.append(h('div',{class:'card'},h('h3',null,'Love language'),h('div',{class:'chips'},['Words','Touch','Gifts','Acts of service','Quality time'].map(function(l){return chipToggle(S.loveLang,l,function(){var i=S.loveLang.indexOf(l);i>-1?S.loveLang.splice(i,1):S.loveLang.push(l);save()})}))));
+    box.append(h('div',{class:'card'},h('h3',null,'How you share moments'),h('div',{class:'chips'},['Photos','Videos','Voice'].map(function(l){return chipToggle(S.mediaPref,l,function(){var i=S.mediaPref.indexOf(l);i>-1?S.mediaPref.splice(i,1):S.mediaPref.push(l);save()})}))));
+    return box;
+  }
+  if(t==='things'){
+    var box=h('div',{class:'card'},h('h3',null,'Our things'),h('div',{class:'gd'},'Add what you both love — Pairlum uses these for prompts and moments.'));
+    THING_CATS.forEach(function(c){box.append(tagList(c,S.things))});
+    var s=h('div',{id:'suggestBox'});setTimeout(renderSuggest,0);
+    return h('div',null,box,h('div',{class:'card'},h('h3',null,'What Pairlum might suggest'),s));
+  }
+  if(t==='language'){
+    var box=h('div',{class:'card'},h('h3',null,'Our language'),h('div',{class:'gd'},'The words that only belong to you two.'));
+    [['nicknames','Nicknames'],['jokes','Inside jokes'],['words','Special words'],['phrases','Phrases only you use'],['emojis','Meaningful emojis'],['morning','Usual good morning']].forEach(function(f){
+      box.append(h('div',{class:'cat'},h('h4',{text:f[1]}),listManager(S.language,f[0],'Add '+f[1].toLowerCase())));
+    });
+    box.append(h('div',{class:'cat'},h('h4',null,'Usual goodbye'),h('input',{class:'in',value:S.language.goodbye,oninput:function(e){S.language.goodbye=e.target.value;save()}})));
+    return box;
+  }
+  if(t==='world')return worldTab();
+  if(t==='rituals'){
+    var box=h('div',{class:'card'},h('h3',null,'Our rituals'),h('div',{class:'gd'},'Name it yourselves — no streak pressure.'));
+    var list=h('div');function draw(){list.replaceChildren();S.rituals.forEach(function(r,i){list.append(h('div',{class:'row',style:'display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--line)'},h('span',null,r.name+' · '+r.freq),h('button',{class:'pill ghost sm',type:'button',onclick:function(){S.rituals.splice(i,1);save();draw()}},'Remove')))})}
+    draw();
+    var inp=h('input',{class:'in',placeholder:'e.g. Friday midnight call'});
+    box.append(list,h('div',{class:'addrow'},inp,h('button',{class:'pill sm',type:'button',onclick:function(){if(!inp.value.trim())return;S.rituals.push({name:inp.value.trim(),freq:'Weekly'});inp.value='';save();draw()}},'Add')));
+    return box;
+  }
+  if(t==='collections'){
+    var box=h('div',{class:'card'},h('h3',null,'Our collections'),h('div',{class:'gd'},'Little mini-spaces that belong just to you.'));
+    var list=h('div');function draw(){list.replaceChildren();S.collections.forEach(function(c,i){list.append(h('div',{style:'display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--line)'},h('span',null,c.emoji+' '+c.name+' · '+c.count),h('button',{class:'pill ghost sm',type:'button',onclick:function(){S.collections.splice(i,1);save();draw()}},'Remove')))})}
+    draw();
+    var e=h('input',{class:'in',style:'max-width:60px',placeholder:'😂'}),n=h('input',{class:'in',placeholder:'Name it'});
+    box.append(list,h('div',{class:'addrow'},e,n,h('button',{class:'pill sm',type:'button',onclick:function(){if(!n.value.trim())return;S.collections.push({emoji:e.value||'💗',name:n.value.trim(),count:0});e.value='';n.value='';save();draw()}},'Create')));
+    return box;
+  }
+  if(t==='vibe'){
+    var box=h('div');
+    box.append(h('div',{class:'card'},h('h3',null,'Pairlum mood'),h('div',{class:'chips'},PL.MOODS.map(function(m){return h('button',{class:'chip',type:'button','aria-pressed':String(PL.mood.get()===m.id),onclick:function(){PL.mood.set(m.id);S.vibe.mood=m.id;save();panel()}},m.name)}))));
+    function slide(label,key,max){var r=h('input',{type:'range',min:'0',max:String(max||100),value:S.vibe[key]});r.addEventListener('input',function(){S.vibe[key]=+r.value;save()});return h('div',{class:'spec'},h('div',{class:'lbl'},h('span',null,label)),r)}
+    box.append(h('div',{class:'card'},h('h3',null,'Fine-tune'),
+      slide('Photo-heavy ↔ Minimal','photoHeavy'),slide('Playful ↔ Emotional','playful'),slide('Motion intensity','motion'),
+      h('div',{class:'chips'},[['sm','Small text'],['md','Medium'],['lg','Large text']].map(function(o){return h('button',{class:'chip',type:'button','aria-pressed':String(S.vibe.textSize===o[0]),onclick:function(){S.vibe.textSize=o[0];save();panel()}},o[1])})),
+      h('div',{class:'chips',style:'margin-top:8px'},[['single','Single column'],['double','Two columns']].map(function(o){return h('button',{class:'chip',type:'button','aria-pressed':String(S.vibe.arrangement===o[0]),onclick:function(){S.vibe.arrangement=o[0];save();panel()}},o[1])}))
+    ));
+    return box;
+  }
+  if(t==='learn')return learnTab();
+  if(t==='season'){
+    var grid=h('div',{class:'season'});
+    SEASONS.forEach(function(sn){grid.append(h('button',{type:'button','aria-pressed':String(S.season===sn),onclick:function(){S.season=sn;save();panel()}},sn))});
+    var note={'Long Distance':'Emphasizing Distance, Letters and Reunion.', 'Living Together':'Emphasizing Today, Plans and Everyday moments.','Planning Reunion':'Emphasizing the countdown and Reunion story.'}[S.season]||'Reshaping Our World around this season, gently.';
+    return h('div',null,h('div',{class:'card'},h('h3',null,'What life feels like right now'),grid),h('div',{class:'suggest'},note));
+  }
+}
+function panel(){$('#panel').replaceChildren(panelFor(cur));renderHero();window.scrollTo(0,0)}
+function tabs(){var b=$('#tabs');b.replaceChildren();TABS.forEach(function(t){b.append(h('button',{'aria-selected':String(cur===t[0]),onclick:function(){cur=t[0];tabs();panel()}},t[1]))})}
+tabs();panel();
+})();
+</script>
+</body>
+</html>

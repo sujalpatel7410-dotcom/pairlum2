@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Settings — Pairlum</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#4A1226">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;1,6..96,400&family=IBM+Plex+Mono:wght@500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="pairlum-core.css">
+<script src="pairlum-config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+<script src="pairlum-core.js"></script>
+<style>
+.st{max-width:1180px;margin:0 auto;padding:0 var(--pad) 60px}
+.st-top{display:flex;align-items:center;gap:14px;padding:18px 0 8px}
+.back{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;border:1.5px solid var(--line);color:var(--ink);text-decoration:none;flex:none}
+.back:hover{border-color:color-mix(in srgb,var(--ink) 40%,transparent)}
+.st-top .pl-mono{color:var(--muted)}
+.hero{margin:18px 0 22px;padding:26px;border-radius:26px;background:linear-gradient(155deg,var(--g1),var(--g2) 55%,var(--g3));color:var(--gtext)}
+.hero .pl-mono{opacity:.8}
+.hero h1{margin:12px 0 0;font:400 var(--h2)/.95 var(--font-display);letter-spacing:-.034em}
+.hero p{margin:10px 0 0;opacity:.85;max-width:52ch}
+.layout{display:grid;gap:18px}
+.tabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;scrollbar-width:none;margin:0 calc(var(--pad)*-1);padding-left:var(--pad);padding-right:var(--pad)}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:none;min-height:44px;padding:0 18px;border-radius:99px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);font:500 .9rem var(--font-ui);cursor:pointer}
+.tabs button[aria-selected=true]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+@media(min-width:960px){
+  .layout{grid-template-columns:240px minmax(0,1fr);gap:48px;align-items:start}
+  .tabs{flex-direction:column;position:sticky;top:20px;margin:0;padding:0;overflow:visible;border-top:1px solid var(--line)}
+  .tabs button{justify-content:flex-start;display:flex;align-items:center;width:100%;min-height:52px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:none;font:500 .74rem var(--font-mono);letter-spacing:.04em;text-transform:uppercase;text-align:left;padding:0 6px}
+  .tabs button[aria-selected=true]{background:none;color:var(--accent)}
+  .tabs button[aria-selected=true]::after{content:"↘";margin-left:auto;font-family:var(--font-display);font-size:1rem}
+}
+.panel{min-width:0;max-width:760px}
+.panel:focus{outline:none}
+.grp{margin-bottom:18px}
+.grp>h2{font:400 1.45rem/1.1 var(--font-display);letter-spacing:-.02em}
+.grp>.gd{margin:6px 0 4px;color:var(--muted);font-size:.9rem}
+.row{display:flex;gap:14px;align-items:center;padding:14px 0;border-top:1px solid var(--line)}
+.grp .row:first-of-type{border-top:0}
+.row .tx{flex:1;min-width:0}
+.row .tx b{display:block;font-weight:500}
+.row .tx small{display:block;color:var(--muted);font-size:.86rem;margin-top:2px}
+.row .val{font-weight:500;text-align:right}
+.row.stack{flex-direction:column;align-items:stretch;gap:8px}
+.row.stack label{font-weight:500}
+.moods{display:grid;gap:10px;margin-top:10px}
+@media(min-width:620px){.moods{grid-template-columns:1fr 1fr}}
+.mood{display:flex;align-items:center;gap:14px;width:100%;padding:12px;border-radius:18px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);text-align:left;cursor:pointer}
+.mood[aria-checked=true]{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 20%,transparent)}
+.mood .sw{flex:none;width:56px;height:42px;border-radius:12px}
+.mood b{display:block;font-weight:500}
+.mood small{display:block;color:var(--muted);font:italic .86rem var(--font-display)}
+.later{list-style:none;margin:8px 0 0;padding:0}
+.later li{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.later li:first-child{border-top:0}
+.later span{color:var(--muted);font-size:.88rem;text-align:right}
+.plans-list .row .btn{flex:none}
+.links a{display:flex;justify-content:space-between;align-items:center;min-height:52px;border-top:1px solid var(--line);text-decoration:none;font-weight:500}
+.links a:first-of-type{border-top:0}
+.links a::after{content:"↗";font-family:var(--font-display)}
+.danger-zone .btn.danger{flex:none}
+.plan-add{display:flex;gap:8px;margin-top:10px}
+.plan-add .in{flex:1}
+</style>
+</head>
+<body>
+<a class="skip" href="#panel">Skip to settings</a>
+<div class="st">
+  <div class="st-top"><a class="back" href="world.html" aria-label="Back to Our World"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></a><span class="pl-mono">Settings</span></div>
+  <div class="hero"><span class="pl-mono">Our space</span><h1 id="heroNames"></h1><p>Everything here shapes how your space looks and feels for the two of you.</p></div>
+  <div class="layout">
+    <div class="tabs" id="tabs" role="tablist" aria-label="Settings sections" aria-orientation="horizontal"></div>
+    <section class="panel" id="panel" role="tabpanel" tabindex="-1"></section>
+  </div>
+</div>
+<script>
+(function(){
+if(!PL.requireSession())return;
+var h=PL.h,$=PL.$,sess=PL.auth.session();
+var KEY=PL.KEYS.world;
+function W(){return PL.read(KEY,{})||{}}
+function saveW(fn){var w=W();fn(w);try{PL.write(KEY,w);if(PL.backend.connected){PL.profile.update({name:(w.me||{}).name||sess.name,mood:w.mood||PL.mood.get(),sound:(w.settings||{}).sound!==false,haptics:(w.settings||{}).haptics!==false,motion:(w.settings||{}).motion!==false});PL.space.update({since:w.since||'',ldr:!!w.ldr,cities:w.cities||{},reunion:w.reunion||''})}return true}catch(e){PL.toast('Couldn’t save on this device.');return false}}
+function wm(){var m=W().moments;return Array.isArray(m)?m:[]}
+function partnerName(){return (W().partner||{}).name||'your person'}
+function joined(){var p=W().partner;return !!(p&&p.joined===true)}
+function renderHero(){var w=W();$('#heroNames').textContent=((w.me||{}).name||'You')+' & '+((w.partner||{}).name||'your person')}
+function grp(title,desc,kids){return h('div',{class:'grp card'},h('h2',null,title),desc?h('p',{class:'gd'},desc):null,kids)}
+function row(label,sub,right){return h('div',{class:'row'},h('div',{class:'tx'},h('b',null,label),sub?h('small',null,sub):null),right||null)}
+function field(label,read,write,o){o=o||{};var id='w-'+label.replace(/\W+/g,'').toLowerCase();
+  var inp=h('input',{class:'in',id:id,type:o.type||'text',autocomplete:o.ac||'off',maxlength:o.type==='date'?null:(o.max||60),max:o.maxv||null,min:o.minv||null});inp.value=read(W())||'';
+  var t;inp.addEventListener(o.type==='date'?'change':'input',function(){clearTimeout(t);t=setTimeout(function(){saveW(function(w){write(w,inp.value)});renderHero()},o.type==='date'?0:250)});
+  return h('div',{class:'row stack'},h('label',{for:id},label),inp,o.hint?h('small',{class:'hint',style:'color:var(--muted)'},o.hint):null)}
+function toggle(label,sub,read,write,opts){opts=opts||{};var id='tg-'+label.replace(/\W+/g,'').toLowerCase();
+  var b=h('button',{type:'button',class:'toggle',role:'switch',id:id,'aria-checked':String(!!read()),disabled:opts.disabled||null,'aria-describedby':sub?id+'-d':null});
+  b.addEventListener('click',function(){var v=!read();if(write(v)!==false)b.setAttribute('aria-checked',String(v))});
+  return h('div',{class:'row'},h('div',{class:'tx'},h('label',{for:id,style:'font-weight:500;display:block'},label),sub?h('small',{id:id+'-d'},sub):null),b)}
+function laterList(items){return h('ul',{class:'later'},items.map(function(i){return h('li',null,h('b',{style:'font-weight:500'},i[0]),h('span',null,i[1]||'Arrives with your connected account'))}))}
+
+/* ---------- Quiet hours: a simple couple-friendly toggle, not a technical schedule ---------- */
+function quietHoursGroup(){
+  var p=PL.profile.get()||{};
+  var deviceTz=(function(){try{return Intl.DateTimeFormat().resolvedOptions().timeZone}catch(e){return ''}})();
+  var on=!!p.quietHoursOn,morning=p.deliverForMorning!==false /* default on: hold gently rather than buzz */;
+  function hhmm(t){return t?t.slice(0,5):''}
+  var fromIn=h('input',{class:'in',type:'time',id:'qh-from',value:hhmm(p.quietStart)||'23:00',disabled:!on});
+  var toIn=h('input',{class:'in',type:'time',id:'qh-to',value:hhmm(p.quietEnd)||'07:00',disabled:!on});
+  var tzAuto=h('input',{type:'checkbox',id:'qh-tzauto',style:'width:22px;height:22px;accent-color:var(--accent)'});
+  tzAuto.checked=!p.timezone||p.timezone===deviceTz;
+  var connected=PL.auth.mode()!=='device';
+  function persist(){
+    p=PL.profile.update({quietHoursOn:on,quietStart:fromIn.value||'23:00',quietEnd:toIn.value||'07:00',
+      timezone:tzAuto.checked?deviceTz:(p.timezone||deviceTz),deliverForMorning:morning});
+  }
+  var onSwitch=h('button',{type:'button',class:'toggle',role:'switch',id:'qh-on','aria-checked':String(on)});
+  onSwitch.addEventListener('click',function(){on=!on;onSwitch.setAttribute('aria-checked',String(on));fromIn.disabled=!on;toIn.disabled=!on;persist()});
+  fromIn.addEventListener('change',persist);toIn.addEventListener('change',persist);
+  tzAuto.addEventListener('change',persist);
+  var morningSwitch=h('button',{type:'button',class:'toggle',role:'switch',id:'qh-morning','aria-checked':String(morning)});
+  morningSwitch.addEventListener('click',function(){morning=!morning;morningSwitch.setAttribute('aria-checked',String(morning));persist()});
+  return grp('Quiet hours','Keep Pairlum quiet while you sleep.',[
+    h('div',{class:'row'},h('div',{class:'tx'},h('label',{for:'qh-on',style:'font-weight:500;display:block'},'Quiet hours'),
+      h('small',null,'Signals, Thinking of You and I Need You arrive silently — never a buzz or a badge — while it’s your night.')),onSwitch),
+    h('div',{class:'row stack'},h('label',{for:'qh-from'},'From'),fromIn),
+    h('div',{class:'row stack'},h('label',{for:'qh-to'},'Until'),toIn),
+    h('div',{class:'row'},h('label',{for:'qh-tzauto',style:'font-weight:500'},'Use my timezone automatically'),tzAuto),
+    h('div',{class:'row'},h('div',{class:'tx'},h('label',{for:'qh-morning',style:'font-weight:500;display:block'},'Deliver for their morning'),
+      h('small',null,'Held gently overnight, there for you when you wake — not a guilt notification waiting to pounce.')),morningSwitch),
+    connected?null:h('p',{class:'pl-pending',style:'margin:10px 0 0'},'Preview · saved on this device until your account is connected')
+  ]);
+}
+
+/* ---------- sections ---------- */
+var TABS=[['profile','Us'],['appearance','Appearance'],['memories','Memories'],['privacy','Privacy'],['membership','Membership'],['account','Account']];
+var S={
+profile:function(){
+  var today=new Date().toISOString().slice(0,10);
+  function cities(w){var c=w.cities||{};w.ldrLabel=[c.me,c.them].filter(Boolean).join(' · ')}
+  var status=joined()?row('Your person',partnerName()+' has joined your space',h('span',{class:'val',style:'color:var(--ok)'},'Connected'))
+    :row('Your person','Waiting for '+partnerName()+' to join',h('button',{class:'btn sm ghost',type:'button',onclick:inviteDialog},'Invite'));
+  return [
+    grp('The two of you',null,[
+      field('Your name',function(w){return (w.me||{}).name},function(w,v){w.me=w.me||{};w.me.name=v.trim()},{ac:'given-name',max:40}),
+      field('Their name',function(w){return (w.partner||{}).name},function(w,v){w.partner=w.partner||{joined:false};w.partner.name=v.trim()},{max:40}),
+      field('Together since',function(w){return w.since},function(w,v){w.since=v},{type:'date',maxv:today})]),
+    grp('Distance',null,[
+      toggle('We live in different places right now','Turns on distance-aware parts of Our World',function(){return !!W().ldr},function(v){return saveW(function(w){w.ldr=v})}),
+      field('Where you are',function(w){return (w.cities||{}).me},function(w,v){w.cities=w.cities||{};w.cities.me=v.trim();cities(w)},{hint:'City or country',max:50}),
+      field('Where they are',function(w){return (w.cities||{}).them},function(w,v){w.cities=w.cities||{};w.cities.them=v.trim();cities(w)},{hint:'City or country',max:50}),
+      field('Next time you’re together',function(w){return w.reunion},function(w,v){w.reunion=v},{type:'date',minv:today})]),
+    grp('Connection',null,[status,h('p',{class:'pl-pending',style:'margin:10px 0 0'},PL.backend.connected?'Your space is private to its two members.':'Device preview · partner connection requires activation')]),
+    grp('Our DNA','The deeper personalization layer: your things, your language, your season.',[h('div',{class:'row'},h('div',{class:'tx'},h('b',null,'Open Our DNA')),h('a',{class:'btn sm ghost',href:'dna.html'},'Open'))])
+  ];
+},
+appearance:function(){
+  var cur=PL.mood.get();
+  var grid=h('div',{class:'moods',role:'radiogroup','aria-label':'Pairlum mood'});
+  var SW={warm:['#3A1420','#7A1D3C','#F3E9E4'],calm:['#FDEEEF','#EAD3CF','#FAF8F6'],deep:['#0E0710','#4A1226','#151013'],blush:['#FF9AC0','#7A1D4E','#FFE9EF'],midnight:['#0B0E1C','#2E3A7A','#0F1220']};
+  PL.MOODS.forEach(function(m){var s=SW[m.id];
+    var b=h('button',{type:'button',class:'mood',role:'radio','aria-checked':String(cur===m.id),tabindex:cur===m.id?'0':'-1','data-m':m.id},
+      h('span',{class:'sw','aria-hidden':'true',style:'background:linear-gradient(150deg,'+s[0]+','+s[1]+' 60%,'+s[2]+')'}),h('span',null,h('b',null,m.name),h('small',null,m.line)));
+    b.addEventListener('click',function(){pick(m.id,b)});grid.append(b)});
+  function pick(id,b){PL.mood.set(id);[].forEach.call(grid.children,function(x){var on=x.dataset.m===id;x.setAttribute('aria-checked',String(on));x.tabIndex=on?0:-1});if(b)b.focus();PL.toast('Now in '+PL.MOODS.filter(function(m){return m.id===id})[0].name)}
+  grid.addEventListener('keydown',function(e){var bs=[].slice.call(grid.children),i=bs.indexOf(document.activeElement);if(i<0)return;
+    var n={ArrowRight:i+1,ArrowDown:i+1,ArrowLeft:i-1,ArrowUp:i-1}[e.key];if(n==null)return;e.preventDefault();n=(n+bs.length)%bs.length;pick(bs[n].dataset.m,bs[n])});
+  var st=function(k,def){var s=W().settings||{};return k in s?s[k]:def};
+  function setS(k,v){return saveW(function(w){w.settings=Object.assign({sound:true,haptics:true,motion:true},w.settings||{});w.settings[k]=v})}
+  var hap=PL.haptics.supported();
+  return [
+    grp('Mood','Changes the colour and feel of your whole space, on this device.',[grid]),
+    grp('Motion & feel',null,[
+      toggle('Reduce motion',PL.motion.osReduced()?'Your device already asks for less motion, so Pairlum keeps things still.':'Keeps transitions and reveals still',function(){return st('motion',true)===false},function(v){PL.motion.setApp(!v);return true}),
+      toggle('Sound','Soft chimes for Signals and reveals',function(){return !!st('sound',true)},function(v){return setS('sound',v)}),
+      toggle('Haptics',hap?'Gentle vibration for long-press and Signals':'Not available on this device',function(){return hap&&!!st('haptics',true)},function(v){return setS('haptics',v)},{disabled:!hap})])
+  ];
+},
+memories:function(){
+  var m=wm(),w=W(),letters=Array.isArray(w.letters)?w.letters:[],plans=Array.isArray(w.plans)?w.plans:[],rd=Array.isArray(w.recentlyDeleted)?w.recentlyDeleted:[];
+  var pl=h('div',{class:'plans-list'});
+  function drawPlans(){pl.replaceChildren();var ps=Array.isArray(W().plans)?W().plans:[];
+    if(!ps.length)pl.append(h('p',{class:'gd',style:'margin:6px 0 0;color:var(--muted)'},'Nothing on the list yet.'));
+    ps.forEach(function(p){var id='pl-'+p.id,cb=h('input',{type:'checkbox',id:id,style:'width:22px;height:22px;accent-color:var(--accent)'});cb.checked=!!p.done;
+      cb.addEventListener('change',function(){saveW(function(w){(w.plans||[]).forEach(function(x){if(x.id===p.id)x.done=cb.checked})})});
+      pl.append(h('div',{class:'row'},cb,h('label',{for:id,class:'tx'},p.text),h('button',{class:'btn sm ghost',type:'button','aria-label':'Remove '+p.text,onclick:function(){saveW(function(w){w.plans=(w.plans||[]).filter(function(x){return x.id!==p.id})});drawPlans()}},'Remove')))})}
+  drawPlans();
+  var addIn=h('input',{class:'in',id:'plan-add',placeholder:'A place, a film, a trip…',maxlength:'80'});
+  var add=h('form',{class:'plan-add',novalidate:true},h('label',{for:'plan-add',class:'vh'},'Add to your plans'),addIn,h('button',{class:'btn sm',type:'submit'},'Add'));
+  add.addEventListener('submit',function(e){e.preventDefault();var v=addIn.value.trim();if(!v)return;saveW(function(w){w.plans=Array.isArray(w.plans)?w.plans:[];w.plans.push({id:Date.now(),cat:'Dates',text:v,done:false})});addIn.value='';drawPlans();addIn.focus()});
+  return [
+    grp('Your archive',null,[row('Moments kept',null,h('span',{class:'val'},String(m.length))),row('Favorites',null,h('span',{class:'val'},String(m.filter(function(x){return x.fav}).length))),
+      row('Hidden from your Timeline','Find them under Hidden in the Archive',h('span',{class:'val'},String(m.filter(function(x){return x.hidden}).length))),
+      row('Recently deleted','Restorable for 30 days in the Archive',h('span',{class:'val'},String(rd.length))),
+      row('Letters still sealed',null,h('span',{class:'val'},String(letters.filter(function(l){return !l.opened}).length)))]),
+    grp('Plans together','Places, films, trips, the little “we should…” list.',[pl,add]),
+    grp('Coming later',null,[laterList([['Bring in older photos in bulk'],['Google Photos and iCloud import']])])
+  ];
+},
+privacy:function(){
+  return [
+    quietHoursGroup(),
+    grp('Private by default',null,[h('ul',{style:'margin:8px 0 0;padding-left:1.1em;line-height:1.7'},
+      h('li',null,'Your space holds exactly two people. No public profile, no followers, no like counts.'),
+      h('li',null,'Your memories are yours. Pairlum doesn’t sell them or any intimate relationship information.'),
+      h('li',null,'Private memories aren’t used as a general AI-training dataset.'),
+      h('li',null,'Pairlum never uses AI to write messages pretending to be your partner.'),
+      h('li',null,'Pairlum is for adults 18+.'))]),
+    grp('Read the details',null,[h('div',{class:'links'},h('a',{href:'legal.html#plain'},'Privacy in plain words'),h('a',{href:'legal.html#privacy'},'Privacy Policy'),
+      h('a',{href:'legal.html#cookies'},'Cookies & tracking'),h('a',{href:'legal.html#data'},'Export, account & deletion'),h('a',{href:'legal.html#acceptable-use'},'Acceptable use'))])
+  ];
+},
+membership:function(){
+  var status=h('p',{class:'pl-pending',style:'margin:10px 0 0'},'Checking your membership…');
+  PL.billing.membership().then(function(ms){status.textContent=ms&&ms.plan?('Plan: '+ms.plan):''},function(){status.textContent='Your membership is confirmed from your account once it’s connected'});
+  return [
+    grp('Your plan',null,[row('First Chapter','Free. Your space, your person, your first memories.'),status,
+      h('div',{class:'row'},h('div',{class:'tx'},h('b',null,'Membership'),h('small',null,'Two plans: Digital, or Digital with a printed Pairlum Book.')),
+        h('a',{class:'btn sm',href:'pricing.html?from=settings',onclick:function(){PL.track('upgrade_clicked',{source:'settings'})}},'See plans'))]),
+    grp('Pairlum Book',null,[row('When it becomes available','After a full year on the Pairlum Membership + Book plan. It doesn’t depend on how many memories you keep.')]),
+    grp('Billing',null,[laterList([['Billing history'],['Receipts']])]),
+    grp('Policies',null,[h('div',{class:'links'},h('a',{href:'legal.html#refund'},'Cancellation & refunds'),h('a',{href:'legal.html#book-terms'},'Pairlum Book terms'),h('a',{href:'legal.html#terms'},'Terms of Service'))])
+  ];
+},
+account:function(){
+  var outBtn=h('button',{class:'btn sm ghost',type:'button'},'Log out');
+  outBtn.addEventListener('click',function(){if(outBtn.disabled)return;outBtn.disabled=true;outBtn.replaceChildren(h('span',{class:'spin','aria-hidden':'true'}),'Logging out…');PL.auth.signOut().then(function(){location.href='index.html'})});
+  var exBtn=h('button',{class:'btn sm ghost',type:'button'},'Export');
+  exBtn.addEventListener('click',function(){if(exBtn.disabled)return;exBtn.disabled=true;exBtn.replaceChildren(h('span',{class:'spin','aria-hidden':'true'}),'Preparing…');
+    (PL.backend.connected?PL.account.serverExport():PL.account.exportDevice()).then(function(){PL.toast('Your export is downloading');exBtn.disabled=false;exBtn.textContent='Export'},function(){PL.toast('The export couldn’t be prepared. Please try again.');exBtn.disabled=false;exBtn.textContent='Export'})});
+  return [
+    grp('Account',null,[row('Email',sess.email+(sess.mode==='device'?' · preview account on this device':'')),
+      h('div',{class:'row'},h('div',{class:'tx'},h('b',null,'Password')),h('a',{class:'btn sm ghost',href:'auth.html#forgot'},'Change')),
+      h('div',{class:'row'},h('div',{class:'tx'},h('b',null,'Log out'),h('small',null,PL.backend.connected?'Your shared space stays saved.':'Your preview stays in this browser.')),outBtn)]),
+    grp('Your data',null,[
+      h('div',{class:'row'},h('div',{class:'tx'},h('b',null,'Export your data'),h('small',null,'Everything this device holds for Pairlum, photos included, as one file. Connected accounts export their saved moments and media.')),exBtn)]),
+    grp('Leaving',null,[
+      h('div',{class:'row danger-zone'},h('div',{class:'tx'},h('b',null,'Delete my account'),h('small',null,'See exactly what happens before anything is deleted.')),h('button',{class:'btn sm danger',type:'button',onclick:deleteDialog},'Delete…')),
+      h('div',{class:'row danger-zone'},h('div',{class:'tx'},h('b',null,'Erase this device'),h('small',null,'Removes Pairlum and everything it keeps from this browser.')),h('button',{class:'btn sm ghost',type:'button',onclick:eraseDialog},'Erase…')),
+      laterList([['Leave this space'],['Delete our shared space']]),
+      h('p',{style:'margin:12px 0 0;font-size:.88rem;color:var(--muted)'},'Deleting a memory, leaving your space, deleting your account and deleting your shared space are four separate actions. ',h('a',{href:'legal.html#data-2'},'How each one works'),'.')]),
+  ];
+}
+};
+
+/* ---------- dialogs ---------- */
+function inviteDialog(){
+  var sp=PL.space.get();if(!sp){location.href='onboarding.html';return}
+  var link=PL.invites.link(sp.inviteCode),msg='I made us a private space on Pairlum. Join me: '+link+' (code '+sp.inviteCode+')';
+  PL.dialog({title:'Invite '+partnerName(),build:function(box,api){
+    var li=h('input',{class:'in',readonly:true,value:link,id:'dlg-link',style:'font:400 .88rem var(--font-mono)'});
+    box.append(h('p',{style:'color:var(--muted);margin:8px 0 0'},'Send them the link. They make their own account and join your space.'),
+      h('div',{class:'field'},h('label',{for:'dlg-link'},'Invite link'),li),
+      h('div',{class:'dl-act'},h('a',{class:'btn ghost',href:'https://wa.me/?text='+encodeURIComponent(msg),target:'_blank',rel:'noopener',onclick:function(){PL.track('invite_sent',{channel:'whatsapp'})}},'WhatsApp'),
+        h('button',{class:'btn',type:'button',onclick:function(){var ok=function(){PL.track('invite_sent',{channel:'copy'});PL.toast('Invite copied');api.close()};
+          if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(msg).then(ok,function(){li.select()});else li.select()}},'Copy invite')),
+      PL.auth.mode()==='device'?h('p',{class:'pl-pending',style:'margin-top:16px'},'Preview: invite links only work once your account is connected to a real backend'):null)}});
+}
+function eraseDialog(){
+  PL.dialog({title:'Erase this device?',alert:true,initialFocus:function(b){return b.querySelector('[data-keep]')},build:function(box,api){
+    var go=h('button',{class:'btn danger',type:'button'},'Erase everything here');
+    go.addEventListener('click',function(){if(go.disabled)return;go.disabled=true;go.replaceChildren(h('span',{class:'spin','aria-hidden':'true'}),'Erasing…');PL.account.eraseDevice().then(function(){location.href='index.html'})});
+    box.append(h('p',{style:'margin:10px 0 0;line-height:1.6'},'This removes your preview account, your space, every memory and photo, and your settings from this browser. It can’t be undone. You may want to export first.'),
+      h('div',{class:'dl-act'},h('button',{class:'btn ghost',type:'button','data-keep':'1',onclick:api.close},'Keep everything'),go))}});
+}
+function deleteDialog(){
+  PL.dialog({title:'Delete your account?',alert:true,initialFocus:function(b){return b.querySelector('input')},build:function(box,api){
+    var inp=h('input',{class:'in',id:'del-confirm',autocomplete:'off',autocapitalize:'characters','aria-describedby':'del-e'});
+    var err=h('span',{class:'err',id:'del-e','aria-live':'polite',style:'display:block;margin-top:6px;color:var(--danger);font-size:.86rem'});
+    var res=h('div',{'aria-live':'polite'});
+    var go=h('button',{class:'btn danger',type:'submit'},'Delete my account');
+    var f=h('form',{novalidate:true},
+      h('ul',{style:'margin:10px 0 0;padding-left:1.1em;line-height:1.65'},
+        h('li',null,'Your account and your personal data are deleted.'),
+        h('li',null,partnerName()+'’s account and the memories they created are not deleted.'),
+        h('li',null,'Your membership and any Book entitlement end with your account.'),
+        h('li',null,'Some payment and legal records are kept for as long as the law requires.')),
+      h('p',{style:'margin:14px 0 0'},'Export your data first if you want a copy. ',h('a',{href:'legal.html#data-8'},'Full details')),
+      h('div',{class:'field'},h('label',{for:'del-confirm'},'Type DELETE to confirm'),inp,err),res,
+      h('div',{class:'dl-act'},h('button',{class:'btn ghost',type:'button',onclick:api.close},'Cancel'),go));
+    f.addEventListener('submit',function(e){e.preventDefault();if(go.disabled)return;
+      if(inp.value.trim().toUpperCase()!=='DELETE'){err.textContent='Type DELETE to confirm.';inp.setAttribute('aria-invalid','true');inp.focus();return}
+      err.textContent='';go.disabled=true;go.replaceChildren(h('span',{class:'spin','aria-hidden':'true'}),'Deleting…');
+      PL.account.deleteAccount().then(function(){PL.auth.signOut().then(function(){location.href='index.html'})},function(e){
+        go.disabled=false;go.textContent='Delete my account';
+        res.replaceChildren(h('div',{class:'notice pending',role:'status',style:'margin-top:16px'},h('div',null,
+          h('p',null,h('b',null,e&&e.code==='offline'?'You’re offline.':'Account deletion needs your connected account.')),
+          h('p',null,e&&e.code==='offline'?'Nothing was deleted. Try again when you’re back online.':'Nothing was deleted. Deleting a Pairlum account happens on the server, which isn’t connected yet. You can erase everything from this device now.'),
+          h('p',null,h('button',{class:'link',type:'button',onclick:function(){api.close();eraseDialog()}},'Erase this device instead')))))});
+    });
+    box.append(f)}});
+}
+
+/* ---------- tabs ---------- */
+var cur=(location.hash||'').slice(1);if(!S[cur])cur='profile';
+function renderTabs(){var box=$('#tabs');box.replaceChildren();
+  TABS.forEach(function(t){box.append(h('button',{type:'button',role:'tab',id:'tab-'+t[0],'aria-selected':String(cur===t[0]),'aria-controls':'panel',tabindex:cur===t[0]?'0':'-1',
+    onclick:function(){if(cur===t[0])return;cur=t[0];history.replaceState(null,'','#'+cur);renderTabs();renderPanel(true)}},t[1]))});
+  box.setAttribute('aria-orientation',matchMedia('(min-width:960px)').matches?'vertical':'horizontal')}
+$('#tabs').addEventListener('keydown',function(e){var bs=[].slice.call($('#tabs').children),i=bs.indexOf(document.activeElement);if(i<0)return;
+  var n={ArrowRight:i+1,ArrowDown:i+1,ArrowLeft:i-1,ArrowUp:i-1,Home:0,End:bs.length-1}[e.key];if(n==null)return;e.preventDefault();n=(n+bs.length)%bs.length;bs[n].click();$('#tab-'+TABS[n][0]).focus()});
+function renderPanel(focus){var p=$('#panel');p.replaceChildren();p.setAttribute('aria-labelledby','tab-'+cur);S[cur]().forEach(function(g){p.append(g)});
+  document.title=TABS.filter(function(t){return t[0]===cur})[0][1]+' · Settings — Pairlum';if(focus&&matchMedia('(max-width:959px)').matches)p.focus({preventScroll:true})}
+renderHero();renderTabs();renderPanel();
+})();
+</script>
+</body>
+</html>
