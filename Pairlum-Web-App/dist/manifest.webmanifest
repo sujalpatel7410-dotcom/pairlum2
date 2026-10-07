@@ -1,1 +1,0 @@
-{"name": "Pairlum \u2014 Our World", "short_name": "Pairlum", "start_url": "./index.html", "scope": "./", "display": "standalone", "background_color": "#F3E9E4", "theme_color": "#4A1226", "icons": [{"src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png"}, {"src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png"}]}
