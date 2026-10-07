@@ -1,0 +1,19 @@
+/* Pairlum core — tiny shared primitives for the public pages (landing,
+   auth, pricing, legal): a reset, the wordmark/monogram, skip link and
+   footer layout. Page-specific CSS is free to restyle colour/size on top
+   of these; this file only sets the shape. */
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0}
+img,svg{max-width:100%;display:block}
+button{font-family:inherit}
+
+.skip{position:absolute;left:-999px;top:auto;width:1px;height:1px;overflow:hidden;white-space:nowrap}
+.skip:focus{position:fixed;left:12px;top:12px;width:auto;height:auto;z-index:1000;padding:10px 16px;border-radius:8px;background:#151013;color:#fff;text-decoration:none}
+
+.pl-wordmark{display:inline-flex;align-items:center;font:600 1.1rem/1 "Cormorant Garamond",Georgia,serif;letter-spacing:.01em;text-decoration:none;color:inherit}
+.pl-monogram{display:inline-grid;place-items:center;font:600 1rem/1 "Cormorant Garamond",Georgia,serif;color:inherit}
+
+.pl-foot{display:flex;flex-wrap:wrap;gap:12px 22px;align-items:center;max-width:1200px;margin:0 auto;padding:28px 24px;font:500 .85rem/1.5 "Jost","Helvetica Neue",Arial,sans-serif}
+.pl-foot a{color:inherit;text-decoration:none;opacity:.78;transition:opacity .2s}
+.pl-foot a:hover,.pl-foot a:focus-visible{opacity:1}
+.pl-foot .sp{flex:1 1 auto}

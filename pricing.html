@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Membership — Pairlum</title>
+<meta name="description" content="Pairlum membership: one private space for the two of you, and an optional printed Pairlum Book after a year together.">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600&family=Jost:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="pairlum-core.css">
+<link rel="stylesheet" href="pairlum-pages.css">
+<script src="pairlum-config.js"></script>
+<script src="pairlum-core.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="pg-hdr">
+  <a class="pl-wordmark" href="index.html">Pairlum</a>
+  <a class="back" href="index.html">← Back</a>
+</header>
+
+<main class="pg-main" id="main" tabindex="-1">
+  <p class="pg-eyebrow">Membership</p>
+  <h1 class="pg-h1">One membership. Everything you share, kept.</h1>
+  <p class="pg-lead">Exactly two plans — no tiers to compare, no features held back for later. Prices are per couple, billed yearly.</p>
+  <div class="plans" id="plans"></div>
+</main>
+
+<footer class="foot"><div class="pl-foot"><span class="pl-wordmark" style="font-size:.9rem">Pairlum</span><span class="sp"></span>
+  <a href="legal.html#plain">Privacy in plain words</a><a href="legal.html#privacy">Privacy</a><a href="legal.html#terms">Terms</a><a href="legal.html#refund">Refunds</a><a href="mailto:pairlum.co@gmail.com">Contact</a></div></footer>
+
+<script>
+(function(){
+'use strict';
+var cfg = window.PAIRLUM_CONFIG || {};
+var plans = cfg.plans || [];
+function money(amount){
+  if(amount === null || amount === undefined) return 'Price announced before launch';
+  try{ return new Intl.NumberFormat(cfg.locale || 'en-IN', { style: 'currency', currency: cfg.currency || 'INR', maximumFractionDigits: 0 }).format(amount); }
+  catch(e){ return (cfg.currency || '') + ' ' + amount; }
+}
+var plansEl = document.getElementById('plans');
+plans.forEach(function(p){
+  var priceNode = p.amount === null
+    ? PL.h('div', { class: 'price', style: 'font-size:1.3rem' }, money(p.amount))
+    : PL.h('div', { class: 'price' }, money(p.amount), PL.h('small', null, ' / ' + p.period));
+  var card = PL.h('div', { class: 'plan' },
+    PL.h('h2', null, p.short || p.name),
+    priceNode,
+    PL.h('p', { class: 'line' }, p.line || ''),
+    PL.h('ul', null, (p.features || []).map(function(f){ return PL.h('li', null, f); })),
+    PL.h('a', { class: 'btn', href: 'auth.html?plan=' + encodeURIComponent(p.id) + '#signup' }, 'Choose ' + (p.short || p.name))
+  );
+  plansEl.append(card);
+});
+})();
+</script>
+</body>
+</html>

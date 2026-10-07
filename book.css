@@ -1,0 +1,387 @@
+/* ==========================================================================
+   PAIRLUM BOOK — preview viewer + the 44 printed pages
+   The pages use their own fixed print colours (ivory paper, wine cloth,
+   muted gold) so the Book looks the same in every app theme.
+   Everything inside a page is sized from the page itself (container
+   units), so a page keeps its exact layout at any size — phone, desktop,
+   full screen or thumbnail.
+   ========================================================================== */
+
+/* ---------- the Book section on Us ---------- */
+.book-section .section-head{flex-wrap:wrap;row-gap:6px}
+.book-lede{max-width:56ch;margin:0 0 6px}
+.book-status{margin:0 0 26px;color:var(--ink-faint)}
+.book-note{margin:22px auto 0;max-width:52ch;text-align:center;color:var(--ink-faint)}
+
+/* ---------- viewer ---------- */
+.bkv{display:flex;flex-direction:column;align-items:center;gap:18px;width:100%;min-width:0;outline:none;border-radius:var(--radius-m)}
+.bkv:focus-visible{outline:2px solid var(--wine);outline-offset:8px}
+.bkv--full:focus-visible{outline:none}
+.bkv-stage{width:100%;display:flex;justify-content:center;perspective:2400px;touch-action:pan-y}
+.bkv-book{position:relative;flex:0 0 auto;transform-style:preserve-3d;transition:transform .72s cubic-bezier(.36,.02,.22,1)}
+.bkv-slot{position:absolute;top:0;height:100%;width:50%;border-radius:2px}
+.bkv-slot--l{left:0}
+.bkv-slot--r{left:50%}
+.bkv[data-mode="single"] .bkv-slot--l{display:none}
+.bkv[data-mode="single"] .bkv-slot--r{left:0;width:100%}
+.bkv-slot:not(.is-empty){box-shadow:0 1px 1px rgba(40,14,18,.18),0 14px 28px -10px rgba(40,14,18,.38),0 30px 60px -28px rgba(40,14,18,.42)}
+.bkv[data-mode="spread"] .bkv-book.is-front{transform:translateX(-25%)}
+.bkv[data-mode="spread"] .bkv-book.is-back{transform:translateX(25%)}
+.bkv-leaf{position:absolute;inset:0}
+.bkv-spine{display:none;position:absolute;top:0;bottom:0;left:50%;width:56px;transform:translateX(-50%);z-index:3;pointer-events:none;
+  background:linear-gradient(90deg,rgba(40,14,18,0) 0%,rgba(40,14,18,.10) 38%,rgba(40,14,18,.26) 50%,rgba(40,14,18,.10) 62%,rgba(40,14,18,0) 100%)}
+.bkv[data-mode="spread"] .bkv-book:not(.is-front):not(.is-back) .bkv-spine{display:block}
+.bkv-flip{position:absolute;top:0;height:100%;width:50%;z-index:5;transform-style:preserve-3d;will-change:transform}
+.bkv-flip--r{left:50%;transform-origin:left center}
+.bkv-flip--l{left:0;transform-origin:right center}
+.bkv-flip--single{left:0;width:100%;transform-origin:left center}
+.bkv-face{position:absolute;inset:0;overflow:hidden;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:2px;box-shadow:0 10px 30px -8px rgba(40,14,18,.45)}
+.bkv-face--back{transform:rotateY(180deg)}
+.bkv-face.is-blank{background:#F3EADF}
+.bkv-shade{position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(40,14,18,.16),rgba(40,14,18,0) 30%)}
+.bkv-flip--l .bkv-face:not(.bkv-face--back) .bkv-shade,.bkv-flip--r .bkv-face--back .bkv-shade{background:linear-gradient(270deg,rgba(40,14,18,.16),rgba(40,14,18,0) 30%)}
+.bkv-zone{position:absolute;top:0;bottom:0;width:50%;z-index:6;margin:0;padding:0;border:0;background:none;-webkit-tap-highlight-color:transparent;cursor:pointer}
+.bkv-zone--prev{left:0;cursor:w-resize}
+.bkv-zone--next{right:0;cursor:e-resize}
+
+.bkv-bar{display:grid;grid-template-columns:48px minmax(0,1fr) 48px 48px;align-items:center;gap:10px;width:100%;max-width:380px}
+.bkv--full .bkv-bar{grid-template-columns:48px minmax(0,1fr) 48px}
+.bkv-btn{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;padding:0;border:1px solid var(--ink);background:transparent;color:var(--ink);cursor:pointer;
+  transition:background var(--dur-fast,.22s),color var(--dur-fast,.22s),opacity var(--dur-fast,.22s),transform var(--dur-fast,.22s)}
+.bkv-btn svg{display:block}
+.bkv-btn:hover:not(:disabled){background:var(--ink);color:var(--paper)}
+.bkv-btn:active:not(:disabled){transform:scale(.94)}
+.bkv-btn:focus-visible{outline:2px solid var(--wine);outline-offset:3px}
+.bkv-btn:disabled{opacity:.3;cursor:default}
+.bkv-label{min-width:0;text-align:center;display:flex;flex-direction:column;gap:2px}
+.bkv-label-main{font-family:var(--font-ui);font-weight:500;font-size:.98rem;line-height:1.25;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bkv-label-sub{font-family:var(--font-ui);font-size:.74rem;line-height:1.3;color:var(--ink-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bkv-hint{margin:0;font-family:var(--font-ui);font-size:.8rem;line-height:1.5;color:var(--ink-faint);text-align:center}
+
+/* ---------- full-screen reader ---------- */
+body.bookv-lock{overflow:hidden}
+.bookv{position:fixed;inset:0;z-index:400;display:none;flex-direction:column;background:#1B1013;color:#F7F0EA;
+  --ink:#F7F0EA;--ink-faint:#BFAFA8;--paper:#1B1013;--wine:#D9A0AA;--line:rgba(247,240,234,.2)}
+.bookv.is-open{display:flex}
+.bookv-top{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px 18px;border-bottom:1px solid rgba(247,240,234,.12)}
+.bookv-title{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1px}
+.bookv-title-main{font-family:var(--font-display);font-weight:400;font-size:1.12rem;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bookv-title-sub{font-family:var(--font-ui);font-size:.72rem;line-height:1.3;color:#BFAFA8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bookv-btn{flex:0 0 auto;height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 12px;border-radius:999px;
+  border:1px solid rgba(247,240,234,.28);background:transparent;color:#F7F0EA;font-family:var(--font-ui);font-size:.84rem;font-weight:500;white-space:nowrap;cursor:pointer}
+.bookv-btn svg{flex:0 0 auto;display:block}
+.bookv-btn:hover{background:rgba(247,240,234,.1)}
+.bookv-btn:focus-visible{outline:2px solid #D9BD8B;outline-offset:2px}
+.bookv-close{padding:0;width:44px}
+@media(max-width:380px){.bookv-all span{display:none}.bookv-all{padding:0;width:44px}}
+.bookv-main{position:relative;flex:1 1 auto;min-height:0}
+.bookv-reader{position:absolute;inset:0;display:flex;padding:14px 12px calc(12px + env(safe-area-inset-bottom,0px))}
+.bookv-reader[hidden],.bookv-grid[hidden]{display:none}
+.bookv-view{flex:1 1 auto;min-width:0;height:100%;justify-content:center;gap:14px}
+.bkv-scrub{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;width:100%;max-width:460px}
+.bkv-scrub-n{font-family:var(--font-mono);font-size:.7rem;color:#BFAFA8;min-width:1.6em;text-align:center}
+.bkv-scrub input{width:100%;min-width:0;margin:0;height:28px;accent-color:#D9BD8B;background:transparent}
+.bookv-grid{position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:18px 16px calc(28px + env(safe-area-inset-bottom,0px));
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:18px 14px;align-content:start}
+.bookv-thumb{display:flex;flex-direction:column;align-items:stretch;gap:6px;min-width:0;margin:0;padding:0;border:0;background:none;color:#BFAFA8;cursor:pointer;font-family:var(--font-mono);font-size:.68rem}
+.bookv-thumb-page{position:relative;display:block;width:100%;aspect-ratio:3/4;border-radius:2px;overflow:hidden;box-shadow:0 6px 16px -6px rgba(0,0,0,.6);outline:2px solid transparent;outline-offset:3px;pointer-events:none}
+.bookv-thumb-n{display:block;text-align:center;line-height:1.2}
+.bookv-thumb.is-current .bookv-thumb-page{outline-color:#D9BD8B}
+.bookv-thumb.is-current{color:#F7F0EA}
+.bookv-thumb:focus-visible .bookv-thumb-page{outline-color:#F7F0EA}
+.bookv-thumb:focus-visible{outline:none}
+
+/* ==========================================================================
+   THE PAGES
+   .bk-page is the sheet. .bk-in sets one type size from the page width;
+   every measure below is in em of that, so nothing can drift or collide.
+   Text that the couple wrote is always given a fixed number of lines.
+   ========================================================================== */
+.bk-page{position:absolute;inset:0;overflow:hidden;container-type:size;background:#FAF5EE;color:#2A1A17;text-align:left;
+  --bk-ink:#2A1A17;--bk-soft:#6B5750;--bk-wine:#7C1B33;--bk-deep:#3D0F1C;--bk-gold:#A9803F;--bk-goldsoft:#D9BD8B;--bk-line:rgba(42,26,23,.16);--bk-blush:#EAD3CF}
+.bk-in{position:absolute;inset:0;box-sizing:border-box;display:flex;flex-direction:column;font-size:3.3cqw;line-height:1.5;padding:3em 2.8em 3.8em;
+  font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-weight:400;letter-spacing:0}
+.bk-in *{box-sizing:border-box;margin:0;padding:0}
+.bk-in ul,.bk-in ol{list-style:none}
+.bk-in > *{flex:0 0 auto;min-width:0;max-width:100%}
+/* soft fall of light toward the spine */
+.bk-recto::after,.bk-verso::after{content:"";position:absolute;top:0;bottom:0;width:9%;pointer-events:none}
+.bk-recto::after{left:0;background:linear-gradient(90deg,rgba(42,26,23,.13),rgba(42,26,23,0))}
+.bk-verso::after{right:0;background:linear-gradient(270deg,rgba(42,26,23,.13),rgba(42,26,23,0))}
+.bk--cover::after,.bk--back::after{width:5%;background:linear-gradient(90deg,rgba(0,0,0,.34),rgba(0,0,0,0) 70%)}
+.bk--back::after{left:auto;right:0;background:linear-gradient(270deg,rgba(0,0,0,.34),rgba(0,0,0,0) 70%)}
+
+.bk-dark{background:linear-gradient(158deg,#86203A 0%,#5E1529 46%,#3D0F1C 100%);color:#FBF3EA;--bk-ink:#FBF3EA;--bk-soft:#E2C9C4;--bk-line:rgba(251,243,234,.24)}
+
+/* line limits */
+.bk-1l{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.bk-c2,.bk-c3,.bk-c4,.bk-c5,.bk-c6,.bk-c7,.bk-c11{display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.bk-c2{-webkit-line-clamp:2;line-clamp:2}.bk-c3{-webkit-line-clamp:3;line-clamp:3}.bk-c4{-webkit-line-clamp:4;line-clamp:4}.bk-c5{-webkit-line-clamp:5;line-clamp:5}
+.bk-c6{-webkit-line-clamp:6;line-clamp:6}.bk-c7{-webkit-line-clamp:7;line-clamp:7}.bk-c11{-webkit-line-clamp:11;line-clamp:11}
+
+/* shared type */
+.bk-label{font-size:.62em;line-height:1.45;letter-spacing:.17em;text-transform:uppercase;font-weight:600;color:var(--bk-soft)}
+.bk-dark .bk-label{color:var(--bk-goldsoft)}
+.bk-h{font-family:"Bodoni Moda",Georgia,"Iowan Old Style",serif;font-weight:400;font-size:2.3em;line-height:1.06;letter-spacing:-.018em;margin:.14em 0 .46em;padding-bottom:.06em}
+.bk-body{font-size:1em;line-height:1.5;color:var(--bk-ink)}
+.bk-small{font-size:.8em;line-height:1.5;color:var(--bk-soft)}
+.bk-rule{display:block;width:3em;height:1px;background:var(--bk-gold);margin:1.3em auto}
+.bk-dark .bk-rule{background:var(--bk-goldsoft)}
+.bk-center{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.bk-center > *{max-width:100%;min-width:0}
+.bk-caption{font-family:"Bodoni Moda",Georgia,serif;font-style:italic;font-size:1.14em;line-height:1.32;margin-top:1.1em;padding-bottom:.08em}
+.bk-caption + .bk-label{margin-top:.6em}
+
+/* folio */
+.bk-folio{position:absolute;left:2.8em;right:2.8em;bottom:1.45em;display:flex;align-items:baseline;justify-content:space-between;gap:1.4em;
+  font-size:.58em;line-height:1.4;letter-spacing:.16em;text-transform:uppercase;color:var(--bk-soft);max-width:none}
+.bk-folio span{flex:1 1 auto;min-width:0}
+.bk-folio b{flex:0 0 auto;font-weight:600;letter-spacing:.06em;font-variant-numeric:tabular-nums}
+.bk-verso .bk-folio{flex-direction:row-reverse}
+.bk-verso .bk-folio span{text-align:right}
+.bk-dark .bk-folio{color:rgba(251,243,234,.72)}
+
+/* photographs */
+.bk-ph{position:relative;overflow:hidden;background:#D8C6B6;border-radius:.12em}
+.bk-ph .photo{position:absolute;inset:0;background-size:cover;background-position:center;transform:none !important;animation:none !important;transition:none !important}
+.bk-full{position:absolute;inset:0;border-radius:0;max-width:none}
+.bk-shade{position:absolute;inset:0;max-width:none;background:linear-gradient(180deg,rgba(30,8,14,.18) 0%,rgba(30,8,14,.05) 34%,rgba(30,8,14,.78) 100%)}
+.bk-top-ph{position:absolute;left:0;right:0;top:0;height:42%;border-radius:0;max-width:none}
+.bk-plate-ph{width:100%;height:23.4em}
+
+.bk-fill-ph{flex:1 1 0;min-height:0;width:100%;margin-top:1.5em}
+.bk-foot{margin-top:auto;padding-top:.9em;border-top:1px solid var(--bk-line);font-family:"Bodoni Moda",Georgia,serif;font-style:italic;font-size:1.06em;line-height:1.38;color:var(--bk-ink)}
+.bk-fill-ph + .bk-foot{margin-top:1.2em;border-top:0;padding-top:0}
+.bk-fill-ph + .bk-sealed-foot{margin-top:1.1em;padding-top:0}
+
+/* monogram */
+.bk-mono{display:flex;align-items:center;justify-content:center;gap:.5em;font-family:"Bodoni Moda",Georgia,serif;font-size:1.5em;line-height:1;color:var(--bk-gold)}
+.bk-dark .bk-mono{color:var(--bk-goldsoft)}
+.bk-mono i{display:block;width:.28em;height:.28em;border-radius:50%;background:currentColor}
+
+/* name sizes for long names */
+.bk-cover-names,.bk-title-mid{--bk-name:2.5em}
+.bk-cover-names.bk-fit1,.bk-title-mid.bk-fit1{--bk-name:2.05em}
+.bk-cover-names.bk-fit2,.bk-title-mid.bk-fit2{--bk-name:1.6em}
+.bk-cover-names.bk-fit3,.bk-title-mid.bk-fit3{--bk-name:1.25em}
+
+/* 1 · front cover / 44 · back cover */
+.bk--cover,.bk--back{background:
+  repeating-linear-gradient(0deg,rgba(255,255,255,.022) 0 1px,rgba(0,0,0,0) 1px 3px),
+  repeating-linear-gradient(90deg,rgba(0,0,0,.05) 0 1px,rgba(0,0,0,0) 1px 3px),
+  linear-gradient(158deg,#8A2140 0%,#5E1529 48%,#3A0E1A 100%)}
+.bk--cover .bk-in{align-items:center;padding:3.1em 2.8em 3em}
+.bk-cover-frame{position:absolute;inset:1.35em;border:1px solid rgba(217,189,139,.55);border-radius:.14em;max-width:none;pointer-events:none}
+.bk-cover-top{width:100%;display:flex;justify-content:space-between;gap:1em;font-size:.58em;line-height:1.4;letter-spacing:.2em;text-transform:uppercase;font-weight:600;color:#D9BD8B;white-space:nowrap}
+.bk-cover-arch{width:14.6em;height:16.2em;margin-top:1.5em;border-radius:7.3em 7.3em .18em .18em;box-shadow:0 0 0 1px rgba(217,189,139,.6),0 0 0 .42em rgba(61,15,28,.55),0 0 0 calc(.42em + 1px) rgba(217,189,139,.35)}
+.bk-cover-names{width:100%;margin-top:1.55em;display:flex;flex-direction:column;align-items:center;text-align:center;font-family:"Bodoni Moda",Georgia,serif;color:#FBF3EA}
+.bk-cover-names span{font-size:var(--bk-name);line-height:1.08;letter-spacing:-.02em;padding-bottom:.06em}
+.bk-cover-names em{font-style:italic;font-size:1.25em;line-height:1.15;color:#D9BD8B}
+.bk-cover-sub{margin-top:auto;width:100%;text-align:center;font-size:.6em;line-height:1.4;letter-spacing:.2em;text-transform:uppercase;font-weight:600;color:#D9BD8B}
+.bk--back .bk-in{padding:3.1em 3.4em 3em}
+.bk-back-line{font-family:"Bodoni Moda",Georgia,serif;font-style:italic;font-size:1.3em;line-height:1.35;margin-top:1.3em;color:#FBF3EA;padding-bottom:.08em}
+.bk-back-mark{flex:0 0 auto;text-align:center;font-size:.62em;line-height:1.4;letter-spacing:.34em;text-transform:uppercase;font-weight:600;color:#D9BD8B}
+
+/* 2 · inside cover */
+.bk--endpaper{background:#EAD3CF}
+.bk--endpaper .bk-in{align-items:center;justify-content:center}
+.bk-end-pattern{position:absolute;inset:0;max-width:none;opacity:.5;
+  background-image:radial-gradient(circle at 50% 50%,rgba(124,27,51,.34) 0 .09em,rgba(124,27,51,0) .1em),radial-gradient(circle at 50% 50%,rgba(169,128,63,.4) 0 .06em,rgba(169,128,63,0) .07em);
+  background-size:1.9em 1.9em,1.9em 1.9em;background-position:0 0,.95em .95em}
+.bk-plate{position:relative;width:19em;padding:2em 1.6em 1.9em;text-align:center;background:#FAF5EE;border:1px solid rgba(124,27,51,.3);box-shadow:0 0 0 .34em #FAF5EE,0 0 0 calc(.34em + 1px) rgba(124,27,51,.22)}
+.bk-plate-names{font-family:"Bodoni Moda",Georgia,serif;font-size:1.7em;line-height:1.14;margin:.5em 0 .45em;padding-bottom:.06em}
+.bk-plate-names.bk-fit1{font-size:1.4em}.bk-plate-names.bk-fit2{font-size:1.15em}
+
+/* 3 · half title, 4 · dedication */
+.bk-half-title{font-family:"Bodoni Moda",Georgia,serif;font-size:2.1em;line-height:1.1;margin:1em 0 .5em;padding-bottom:.06em}
+.bk--half .bk-label{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;overflow-wrap:anywhere}
+.bk-ded{font-family:"Bodoni Moda",Georgia,serif;font-style:italic;font-size:1.36em;line-height:1.42;max-width:15.6em;padding-bottom:.08em}
+
+/* 5 · title page */
+.bk--title .bk-in{align-items:center;text-align:center}
+.bk-title-top{margin-top:1.2em}
+.bk-title-mid{flex:1 1 auto;min-height:0;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:"Bodoni Moda",Georgia,serif}
+.bk-title-mid h3{font-weight:400;font-size:calc(var(--bk-name) * 1.16);line-height:1.08;letter-spacing:-.02em;padding-bottom:.06em}
+.bk-title-mid em{font-style:italic;font-size:1.2em;line-height:1.5;color:var(--bk-gold)}
+.bk-title-bot{width:100%;display:flex;flex-direction:column;align-items:center;gap:.2em;margin-bottom:.6em}
+.bk-title-bot .bk-rule{margin:.2em auto 1em}
+.bk-title-imprint{margin-top:1.2em}
+
+/* 6 · contents */
+.bk-toc{margin-top:.9em;display:flex;flex-direction:column}
+.bk-toc li{display:grid;grid-template-columns:2em minmax(0,auto) minmax(1.2em,1fr) auto;align-items:baseline;column-gap:.6em;padding:.78em 0;border-bottom:1px solid var(--bk-line)}
+.bk-toc-n{font-size:.62em;letter-spacing:.14em;font-weight:600;color:var(--bk-gold)}
+.bk-toc-t{font-family:"Bodoni Moda",Georgia,serif;font-size:1.22em;line-height:1.25;padding-bottom:.04em}
+.bk-toc-d{border-bottom:1px dotted rgba(42,26,23,.4);transform:translateY(-.28em)}
+.bk-toc-p{font-size:.84em;font-variant-numeric:tabular-nums;color:var(--bk-soft)}
+.bk-toc-foot{margin-top:1.6em}
+
+/* 7 · the two of us */
+.bk-portraits{display:grid;grid-template-columns:minmax(0,1fr) 2em minmax(0,1fr);align-items:start;margin-top:1.5em}
+.bk-portrait{min-width:0;display:flex;flex-direction:column;align-items:center;text-align:center;gap:.22em}
+.bk-avatar{width:6.4em;height:6.4em;border-radius:50%;display:grid;place-items:center;margin-bottom:.9em;color:#FBF3EA;background:radial-gradient(circle at 34% 28%,#B55A6C,#7C1B33 58%,#4B1222)}
+.bk-avatar b{font-family:"Bodoni Moda",Georgia,serif;font-weight:400;font-size:2.7em;line-height:1}
+.bk-portrait--b .bk-avatar{background:radial-gradient(circle at 34% 28%,#E3CB9E,#A9803F 60%,#6F5226)}
+.bk-portrait-name{font-family:"Bodoni Moda",Georgia,serif;font-size:1.6em;line-height:1.16;padding-bottom:.06em}
+.bk-portrait-name.bk-fit1{font-size:1.25em}.bk-portrait-name.bk-fit2{font-size:1em}
+.bk-amp{align-self:start;margin-top:2em;text-align:center;font-family:"Bodoni Moda",Georgia,serif;font-style:italic;font-size:1.5em;line-height:1.2;color:var(--bk-gold)}
+.bk-two-foot{margin-top:auto;padding-top:1em;border-top:1px solid var(--bk-line);font-family:"Bodoni Moda",Georgia,serif;font-style:italic;font-size:1.12em;line-height:1.4}
+
+/* 8 · distance */
+.bk--distance .bk-in{align-items:center;text-align:center}
+.bk-arc{width:100%;margin-top:.6em;color:var(--bk-soft);line-height:0}
+.bk-arc svg{display:block;width:100%;height:auto;aspect-ratio:2/1}
+.bk-arc-cities{width:100%;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:1.2em;margin-top:.5em;font-size:.66em;line-height:1.4;letter-spacing:.14em;text-transform:uppercase;font-weight:600}
+.bk-arc-cities span:first-child{text-align:left;color:var(--bk-wine)}
+.bk-arc-cities span:last-child{text-align:right;color:#7A5A26}
+.bk-bignum{font-family:"Bodoni Moda",Georgia,serif;font-size:3.3em;line-height:1.1;letter-spacing:-.02em;margin:.4em 0 .12em;padding-bottom:.05em}
+.bk-bignum small{font-size:.34em;letter-spacing:.14em;text-transform:uppercase;font-family:"Inter",sans-serif;font-weight:600;color:var(--bk-soft)}
+.bk-dist-foot{margin-top:auto;padding-top:1em;border-top:1px solid var(--bk-line);width:100%;font-family:"Bodoni Moda",Georgia,serif;font-style:italic;font-size:1.08em;line-height:1.4}
+
+/* 9 · numbers */
+.bk-stats{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border-top:1px solid var(--bk-line);margin-top:.4em}
+.bk-stat{min-width:0;padding:1.05em .4em 1em 0;border-bottom:1px solid var(--bk-line)}
+.bk-stat:nth-child(even){padding-left:1.1em;border-left:1px solid var(--bk-line)}
+.bk-stat b{font-family:"Bodoni Moda",Georgia,serif;font-weight:400;font-size:2.3em;line-height:1.12;letter-spacing:-.02em;padding-bottom:.04em}
+.bk-stat span{font-size:.62em;line-height:1.5;letter-spacing:.15em;text-transform:uppercase;font-weight:600;color:var(--bk-soft)}
+.bk-stats-foot{margin-top:1.3em}
+
+/* 10–21 · chapters */
+.bk--chapter-open .bk-in{padding:0}
+.bk-ch-open{position:absolute;left:2.8em;right:2.8em;bottom:3.1em;max-width:none;color:#FBF3EA}
+.bk-ch-open .bk-label{color:#EAD9B8}
+.bk-ch-title{font-family:"Bodoni Moda",Georgia,serif;font-weight:400;font-size:2.7em;line-height:1.06;letter-spacing:-.02em;margin:.22em 0 .32em;padding-bottom:.07em}
+.bk-ch-title.bk-fit1{font-size:2.2em}.bk-ch-title.bk-fit2{font-size:1.8em}
+.bk-drop{font-family:"Bodoni Moda",Georgia,serif;font-size:1.2em;line-height:1.46;margin-top:.9em;padding-bottom:.08em}
+.bk-drop::first-line{letter-spacing:.02em}
+.bk-pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:1em;margin-top:auto;align-items:end}
+.bk-pair-fig{min-width:0}
+.bk-pair-ph{width:100%;height:17.4em}
+.bk-pair-fig--1 .bk-pair-ph{height:13.6em}
+.bk-pair-fig figcaption{margin-top:.6em;font-size:.66em;line-height:1.4;color:var(--bk-soft)}
+.bk--chapter-one .bk-in,.bk--reunion .bk-in{padding-top:calc(42cqh + 1.7em)}
+.bk-ch-one .bk-h{font-size:1.9em;margin:.2em 0 .4em}
+.bk-ch-one .bk-body{font-size:.95em}
+.bk-lines{margin-top:.6em}
+.bk-lines li{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,auto);column-gap:1em;align-items:baseline;padding:.7em 0;border-bottom:1px solid var(--bk-line)}
+.bk-lines b{font-family:"Bodoni Moda",Georgia,serif;font-weight:400;font-size:1.12em;line-height:1.3}
+.bk-lines span{font-size:.66em;color:var(--bk-soft);max-width:11em}
+.bk-trio{display:grid;grid-template-columns:1.25fr 1fr;grid-template-rows:1fr 1fr;gap:.7em;height:23.4em}
+.bk-trio-a{grid-row:1 / 3}
+
+/* 22, 29, 38 · dividers */
+.bk-div-title{font-family:"Bodoni Moda",Georgia,serif;font-weight:400;font-size:2.9em;line-height:1.08;letter-spacing:-.02em;margin-top:.36em;padding-bottom:.07em}
+.bk-div-line{font-family:"Bodoni Moda",Georgia,serif;font-style:italic;font-size:1.14em;line-height:1.4;max-width:15em;color:#F1DEDA;padding-bottom:.08em}
+
+/* 23, 24 · a day each */
+.bk-day{border-top:1px solid var(--bk-line)}
+.bk-day li{display:grid;grid-template-columns:4.3em 5.2em minmax(0,1fr);column-gap:.9em;align-items:center;padding:.62em 0;border-bottom:1px solid var(--bk-line);min-height:6.45em}
+.bk-day-time{font-size:.62em;line-height:1.4;letter-spacing:.1em;text-transform:uppercase;font-weight:600;color:var(--bk-soft)}
+.bk-day-ph{width:5.2em;height:5.2em}
+.bk-day-kind{width:5.2em;height:5.2em;display:grid;place-items:center;border:1px solid var(--bk-line);border-radius:.12em;font-size:1em;color:var(--bk-wine)}
+.bk-day-kind{font-family:"Bodoni Moda",Georgia,serif;font-style:italic}
+.bk-day-text{font-size:.95em;line-height:1.42}
+
+/* 26 · four photographs */
+.bk-grid4{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:.7em;height:24.4em}
+
+/* 27 · notes */
+.bk-notes{display:flex;flex-direction:column;gap:.72em}
+.bk-notes li{max-width:86%;min-width:0;padding-left:.9em;border-left:.14em solid var(--bk-wine)}
+.bk-notes li.is-b{align-self:flex-end;text-align:right;padding-left:0;padding-right:.9em;border-left:0;border-right:.14em solid var(--bk-gold)}
+.bk-notes p{font-family:"Bodoni Moda",Georgia,serif;font-style:italic;font-size:1.06em;line-height:1.32;padding-bottom:.06em}
+.bk-notes span{margin-top:.2em;font-size:.58em;line-height:1.5;letter-spacing:.16em;text-transform:uppercase;font-weight:600;color:var(--bk-soft)}
+
+/* 28 · a voice */
+.bk-wave{display:flex;align-items:center;justify-content:center;gap:.26em;width:100%;height:7em;margin:1.6em 0 1.3em}
+.bk-wave i{display:block;flex:0 0 .3em;border-radius:.2em;background:var(--bk-wine)}
+.bk-wave i:nth-child(3n){background:var(--bk-gold)}
+.bk-voice-line{font-family:"Bodoni Moda",Georgia,serif;font-size:1.3em;line-height:1.35;padding-bottom:.07em}
+.bk--voice .bk-small{max-width:17em}
+
+/* 30, 31 · letters */
+.bk--letter{background:#FBF7F1}
+.bk--letter .bk-in{padding-top:5em}
+.bk-letter-title{font-family:"Bodoni Moda",Georgia,serif;font-weight:400;font-size:1.72em;line-height:1.14;margin:.3em 0 .9em;padding-bottom:.07em}
+.bk-letter-body{border-top:1px solid var(--bk-line);padding-top:1.1em}
+.bk-letter-body p{font-family:"Bodoni Moda",Georgia,serif;font-size:1.12em;line-height:1.55;padding-bottom:.08em}
+.bk-sign{margin-top:1.1em;text-align:right;font-family:"Bodoni Moda",Georgia,serif;font-style:italic;font-size:1.2em;line-height:1.3;color:var(--bk-wine);padding-bottom:.06em}
+
+/* 32 · sealed */
+.bk-sealed{border-top:1px solid var(--bk-line)}
+.bk-sealed li{display:grid;grid-template-columns:2.6em minmax(0,1fr);column-gap:1em;align-items:center;padding:.9em 0;border-bottom:1px solid var(--bk-line)}
+.bk-seal{width:2.6em;height:2.6em;border-radius:50%;background:radial-gradient(circle at 36% 30%,#A8334E,#7C1B33 55%,#4B1222);box-shadow:inset 0 0 0 .16em rgba(255,255,255,.14)}
+.bk-sealed div{min-width:0}
+.bk-sealed b{font-family:"Bodoni Moda",Georgia,serif;font-weight:400;font-size:1.1em;line-height:1.26;padding-bottom:.05em}
+.bk-sealed span{margin-top:.2em;font-size:.62em;line-height:1.5;letter-spacing:.12em;text-transform:uppercase;font-weight:600;color:var(--bk-soft)}
+.bk-sealed-foot{margin-top:auto;padding-top:1em}
+
+/* 33, 34 · questions */
+.bk-qs{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:1.3em}
+.bk-q{min-width:0;padding-top:1em;border-top:1px solid var(--bk-line)}
+.bk-q-q{font-family:"Bodoni Moda",Georgia,serif;font-style:italic;font-size:1.08em;line-height:1.3;color:var(--bk-wine);padding-bottom:.06em}
+.bk-q-a{margin-top:.55em;font-size:.88em;line-height:1.45}
+.bk-q-a b{font-size:.72em;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--bk-soft);margin-right:.5em}
+
+/* 35 · DNA */
+.bk-dna{margin-top:.2em}
+.bk-dna li{display:grid;grid-template-columns:7.3em minmax(0,1fr) 7.3em;column-gap:.7em;align-items:center;height:2.25em}
+.bk-dna li span{font-size:.64em;line-height:1.4;color:var(--bk-soft)}
+.bk-dna li span:last-child{text-align:right}
+.bk-dna-bar{position:relative;height:1px;background:rgba(42,26,23,.3)}
+.bk-dna-bar i,.bk-key i{display:block;width:.72em;height:.72em;border-radius:50%}
+.bk-dna-bar i{position:absolute;top:50%;margin:-.36em 0 0 -.36em}
+.bk-dna-bar i.is-a,.bk-key i.is-a{background:var(--bk-wine)}
+.bk-dna-bar i.is-b,.bk-key i.is-b{background:var(--bk-gold);box-shadow:0 0 0 .12em #FAF5EE}
+.bk-key{display:flex;justify-content:center;gap:1.8em;margin:.9em 0 1.1em;font-size:.62em;line-height:1.4;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--bk-soft)}
+.bk-key span{display:inline-flex;align-items:center;gap:.6em;min-width:0;white-space:nowrap}
+.bk-key i{flex:0 0 auto;font-size:1.3em}
+
+/* 36 · little things */
+.bk-facts{border-top:1px solid var(--bk-line)}
+.bk-facts li{padding:.62em 0 .66em;border-bottom:1px solid var(--bk-line)}
+.bk-facts span{font-size:.58em;line-height:1.5;letter-spacing:.15em;text-transform:uppercase;font-weight:600;color:var(--bk-soft)}
+.bk-facts b{font-family:"Bodoni Moda",Georgia,serif;font-weight:400;font-size:1.06em;line-height:1.3;padding-bottom:.05em}
+
+/* 37 · dates */
+.bk-dates{border-top:1px solid var(--bk-line)}
+.bk-dates li{display:grid;grid-template-columns:8.4em minmax(0,1fr);column-gap:1em;align-items:center;padding:.74em 0;border-bottom:1px solid var(--bk-line)}
+.bk-dates b{font-family:"Bodoni Moda",Georgia,serif;font-weight:400;font-size:1.12em;line-height:1.3;color:var(--bk-wine);padding-bottom:.04em}
+.bk-dates div{min-width:0}
+.bk-dates span{font-size:.94em;line-height:1.35}
+.bk-dates em{font-style:normal;font-size:.6em;line-height:1.5;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--bk-soft);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+
+/* 39 · reunion */
+.bk-reunion .bk-bignum{margin:.25em 0 .2em}
+.bk-reunion .bk-body{font-family:"Bodoni Moda",Georgia,serif;font-style:italic;font-size:1.12em;line-height:1.4;padding-bottom:.07em}
+
+/* 40 · someday */
+.bk-someday{border-top:1px solid var(--bk-line)}
+.bk-someday li{display:grid;grid-template-columns:1.2em minmax(0,1fr);column-gap:.9em;align-items:start;padding:.68em 0;border-bottom:1px solid var(--bk-line)}
+.bk-someday i{display:block;width:1.05em;height:1.05em;margin-top:.22em;border:1px solid var(--bk-soft);border-radius:50%}
+.bk-someday li.is-done i{border-color:var(--bk-wine);background:var(--bk-wine);box-shadow:inset 0 0 0 .2em #FAF5EE}
+.bk-someday span{font-family:"Bodoni Moda",Georgia,serif;font-size:1.1em;line-height:1.32;padding-bottom:.05em}
+.bk-someday li.is-done span{color:var(--bk-soft)}
+
+/* 41 · the hard days */
+.bk-needs-title{font-family:"Bodoni Moda",Georgia,serif;font-weight:400;font-size:2em;line-height:1.12;margin:.3em 0 .9em;padding-bottom:.06em}
+.bk-needs{width:100%;margin-bottom:1.3em}
+.bk-needs li{font-family:"Bodoni Moda",Georgia,serif;font-style:italic;font-size:1.16em;line-height:1.3;padding:.42em 0;border-bottom:1px solid var(--bk-line)}
+.bk-needs li:first-child{border-top:1px solid var(--bk-line)}
+
+/* 42 · closing, 43 · colophon */
+.bk-closing{font-family:"Bodoni Moda",Georgia,serif;font-weight:400;font-size:2.5em;line-height:1.14;letter-spacing:-.02em;padding-bottom:.07em}
+.bk-colophon{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;text-align:center;gap:1em;padding-bottom:1.4em}
+.bk-colophon .bk-small{max-width:17em}
+.bk-colophon .bk-mono{margin-bottom:.6em}
+
+/* ---------- the small Book card on Home ---------- */
+.book-teaser{flex-wrap:wrap}
+.book-teaser > div:not(.book-cover){flex:1 1 180px;min-width:0}
+.book-teaser .link-more{white-space:nowrap}
+
+@media (prefers-reduced-motion: reduce){ .bkv-book{transition:none} }
+body.reduced-motion .bkv-book{transition:none}
+#bookSection{scroll-margin-top:92px}
+
+.bk-excerpt{margin-top:.5em;font-style:italic;opacity:.8}

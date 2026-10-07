@@ -1,0 +1,1539 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pairlum — Your day together</title>
+<meta name="description" content="Pairlum dashboard prototype — the shared day, presence, and history of a long-distance couple.">
+<script>
+/* One-year demo: ?demo=year shows this space after a year of heavy use;
+   ?demo=off returns to your own. It stays on for this browser tab only. */
+(function(){
+  try{
+    var q = /(?:^|[?&])demo=([a-z]+)/.exec(location.search), s = window.sessionStorage;
+    if(q){ if(q[1] === "year") s.setItem("pairlum-demo", "year"); else s.removeItem("pairlum-demo"); }
+    if(s.getItem("pairlum-demo") === "year") document.write('<script src="demo-year.js"><\/script>');
+  }catch(e){}
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,wght@0,400..500;1,400..500&family=IBM+Plex+Mono:wght@500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="book.css">
+<script src="pairlum-config.js"></script>
+<script>
+(function(){
+  try{
+    // the look is private to each person, so the key ends in who this tab is
+    var ns = window.PAIRLUM_STORAGE_NS || "", who = null;
+    if(/[?&]as=/i.test(location.search)) who = /[?&]as=[a-z_]*mira/i.test(location.search) ? "u_mira" : "u_aarav";
+    if(!who){ try{ who = sessionStorage.getItem(ns + "pairlum-me-v1"); }catch(e){} }
+    who = who === "u_mira" ? "u_mira" : "u_aarav";
+    var m = localStorage.getItem(ns + "pairlum-mood-v1-" + who);
+    if(m === null && who === "u_aarav") m = localStorage.getItem(ns + "pairlum-mood-v1");
+    if(m && m !== "warm") document.documentElement.setAttribute("data-mood", m);
+  }catch(e){}
+  try{
+    // Dashboard Design Studio — dev-only tool, never on for real visitors.
+    // Setting the attribute here (before paint) lets design-studio.css
+    // hide #app with zero flash; the actual studio files are only
+    // requested (see the loader at the end of <body>) when this matches.
+    if(/(?:^|[?&])design=1(?:&|$)/.test(location.search)){
+      document.documentElement.setAttribute("data-design-studio", "1");
+    }
+  }catch(e){}
+})();
+</script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<!-- Soft petals drifting behind everything. Decoration only: hidden from screen readers, never catches a tap. -->
+<div class="atmos" aria-hidden="true"><i></i><i></i></div>
+<div class="petals" id="petals" aria-hidden="true" hidden></div>
+
+<div class="app" id="app">
+
+  <!-- ============ TOP BAR ============ -->
+  <header class="topbar">
+    <div class="brand">Pairlum <small id="brandCities">Ahmedabad ⟷ Berlin</small></div>
+
+    <nav class="top-nav" aria-label="Primary">
+      <button class="nav-btn is-active" data-view="home" type="button">Home</button>
+      <button class="nav-btn" data-view="story" type="button">Our Story</button>
+      <button class="nav-btn" data-view="letters" type="button">Letters</button>
+      <button class="nav-btn" data-view="us" type="button">Us</button>
+    </nav>
+
+    <div class="topbar-end">
+      <div class="topbar-meta">
+        <span class="num" id="clockA">10:42 AM</span>
+        <span class="dot"></span>
+        <span class="num" id="clockB">7:12 PM</span>
+        <span class="avatar-pair" aria-hidden="true">
+          <span class="avatar avatar--a" id="avatarA">A</span>
+          <span class="avatar avatar--b" id="avatarB">M</span>
+        </span>
+      </div>
+      <!-- The bell: everything your partner did, kept in one quiet place. -->
+      <button class="bell" id="notifBell" type="button" aria-label="Notifications" data-action="open-inbox">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 10a6 6 0 0 1 12 0c0 5 2 6 2 7H4c0-1 2-2 2-7Z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>
+        <span class="bell-count" id="bellCount" hidden></span>
+      </button>
+    </div>
+  </header>
+
+  <!-- One connected world, not four separate screens: this strip stays put
+       while the track swipes underneath it, so the page you land on always
+       reads as a position within the same place rather than a new place. -->
+  <nav class="swipe-dots" id="swipeDots" aria-label="Page position" data-no-page-swipe>
+    <button class="swipe-dot is-active" data-view="home" type="button" aria-label="Home"></button>
+    <button class="swipe-dot" data-view="story" type="button" aria-label="Our Story"></button>
+    <button class="swipe-dot" data-view="letters" type="button" aria-label="Letters"></button>
+    <button class="swipe-dot" data-view="us" type="button" aria-label="Us"></button>
+  </nav>
+
+  <main id="main">
+  <div class="view-track" id="viewTrack">
+
+    <!-- ================================================================
+         HOME VIEW
+         ================================================================ -->
+    <section class="view is-active" id="view-home" data-view-panel="home">
+
+      <!-- FOR YOU — what your partner left that you haven't seen yet. Hidden when there's nothing. -->
+      <div class="container">
+        <div class="waiting" id="waitingStrip" hidden data-no-page-swipe>
+          <p class="waiting-head"><span class="eyebrow">For you</span><span class="waiting-count" id="waitingCount"></span></p>
+          <div class="waiting-list" id="waitingList"></div>
+        </div>
+        <button type="button" class="on-this-day" id="onThisDay" hidden>
+          <span class="on-this-day-media" id="onThisDayMedia"></span>
+          <span class="on-this-day-copy">
+            <span class="eyebrow" id="onThisDayWhen">On this day</span>
+            <span class="on-this-day-caption" id="onThisDayCaption"></span>
+            <span class="body-s">Tap to open the memory</span>
+          </span>
+        </button>
+      </div>
+
+      <!-- PARTNER PRESENCE — small header, both live times side by side. First thing on the page, but compact. -->
+      <div class="container">
+        <section class="section presence-top presence-top--compact">
+          <div class="presence presence--compact">
+            <p class="little-line" id="littleLine"></p>
+            <div class="presence-people">
+              <div class="presence-person">
+                <span class="presence-avatar presence-avatar--you" id="presenceAvatarA">A</span>
+                <span class="presence-person-name">You</span>
+                <span class="presence-person-time num" id="presenceClockA">10:42 AM</span>
+                <span class="presence-person-loc" id="presenceLocA">Ahmedabad</span>
+              </div>
+
+              <div class="presence-link" aria-hidden="true">
+                <span class="presence-dash"></span>
+                <span class="presence-chip">
+                  <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+                  <span id="presenceDistance">6,512 km apart</span>
+                </span>
+                <span class="presence-dash"></span>
+              </div>
+
+              <div class="presence-person">
+                <span class="presence-avatar presence-avatar--her" id="presenceAvatarB">M</span>
+                <span class="presence-person-name" id="presenceNameB">Mira</span>
+                <span class="presence-person-time num" id="presenceClockB">7:12 PM</span>
+                <span class="presence-person-loc" id="presenceLocB">Berlin</span>
+              </div>
+            </div>
+
+            <p class="presence-line presence-line--compact" id="presenceLine">Mira shared a little piece of the evening · 20 min ago. <span class="tint">There's a small note waiting for you.</span></p>
+
+            <!-- TODAY FEELS — one-tap feeling check-in. Share yours first, then see theirs. -->
+            <div class="feel" id="feelBlock" data-no-page-swipe>
+              <p class="feel-label" id="feelLabel">How does today feel?</p>
+              <div class="feel-chips" id="feelChips" role="group" aria-label="How today feels"></div>
+              <p class="feel-line" id="feelLine" hidden></p>
+            </div>
+
+            <!-- GOOD NIGHT / GOOD MORNING — tells your partner when you're asleep. -->
+            <div class="sleep-row" data-no-page-swipe>
+              <p class="sleep-line" id="sleepLine" role="status"></p>
+              <button type="button" class="feel-chip" id="sleepBtn" aria-pressed="false">Say good night</button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- SPACE PAUSED — shown instead of Shared Day/Parallel/I Need You/Thinking of You
+           whenever the couple isn't currently a joined pair. Nothing couple-only
+           renders behind this; see applyPairingGate() in app.js. -->
+      <div class="container">
+        <div class="space-paused" id="spacePausedNotice" hidden>
+          <p class="eyebrow">Shared Day is paused</p>
+          <p class="space-paused-text" id="spacePausedText">Connect with your partner to bring Shared Day back to life.</p>
+          <button class="first-chapter-cta" type="button" data-action="open-pairing">Reconnect →</button>
+        </div>
+      </div>
+
+      <div id="coupleLiveWrap">
+        <!-- SOUND OF WHERE THEY ARE — play your partner's surroundings softly in
+             the background; share your own. Never starts by itself. -->
+        <div data-home-card="ambient" class="container">
+          <section class="section" style="padding-top:14px;padding-bottom:0">
+            <div class="ambient" id="ambientCard" data-no-page-swipe>
+              <div class="ambient-theirs">
+                <button class="ambient-play" id="ambientPlayBtn" type="button" aria-pressed="false" disabled></button>
+                <div class="ambient-copy">
+                  <p class="eyebrow" id="ambientEyebrow">Where Mira is</p>
+                  <p class="ambient-title" id="ambientTitle"></p>
+                  <span class="ambient-meta" id="ambientMeta"></span>
+                </div>
+              </div>
+              <input type="range" class="ambient-volume" id="ambientVolume" min="0" max="100" step="5" value="45" aria-label="Background sound volume" hidden>
+              <div class="live-row" id="liveRow">
+                <span class="ambient-mine-line" id="liveStatus"></span>
+                <button type="button" class="ambient-link" id="liveAskBtn">Ask to listen live</button>
+              </div>
+              <div class="ambient-mine" id="ambientMine">
+                <span class="ambient-mine-line" id="ambientMineLine"></span>
+                <div class="ambient-mine-actions">
+                  <button type="button" class="ambient-link" id="ambientShareBtn">Share the sound around you</button>
+                  <button type="button" class="ambient-link" id="ambientRemoveBtn" hidden>Remove</button>
+                </div>
+              </div>
+              <div class="ambient-rec" id="ambientRec" hidden>
+                <p class="ambient-rec-status" id="ambientRecStatus" role="status"></p>
+                <button type="button" class="btn-primary" id="ambientRecStop" hidden>Stop recording</button>
+                <div id="ambientReview" hidden>
+                  <audio class="ambient-preview" id="ambientPreview" controls></audio>
+                  <label class="visually-hidden" for="ambientLabelInput">What is this sound?</label>
+                  <input type="text" class="imp-caption" id="ambientLabelInput" maxlength="40" placeholder="What is it? e.g. Rain on my window">
+                  <div class="ambient-rec-actions">
+                    <button type="button" class="btn-ghost" id="ambientAgainBtn">Record again</button>
+                    <button type="button" class="btn-primary" id="ambientSendBtn">Share</button>
+                  </div>
+                </div>
+                <button type="button" class="ambient-link" id="ambientRecCancel">Cancel</button>
+              </div>
+            </div>
+          </section>
+        </div>
+        <!-- UPCOMING DATE REMINDER — the single soonest anniversary/birthday/
+             custom date, only when it's within 2 weeks and not dismissed. -->
+        <div class="container">
+          <div class="upcoming-reminder" id="upcomingReminder" hidden>
+            <span id="upcomingReminderText"></span>
+            <button type="button" id="upcomingReminderDismiss" aria-label="Dismiss">✕</button>
+          </div>
+        </div>
+
+        <!-- SHARED DAY — immediately after presence, first screen -->
+        <div data-home-card="sharedDay" class="container shared-day shared-day--top">
+          <div class="shared-day-head">
+            <div>
+              <p class="eyebrow" id="todayEyebrow">Today</p>
+              <h2 class="disp-2">Your Shared Day</h2>
+              <div class="hero-cities hero-cities--inline">
+                <b id="cityALabel">Ahmedabad</b> <span id="cityAWeather">10:42 AM</span>
+                <span class="arrow">—</span>
+                <b id="cityBLabel">Berlin</b> <span id="cityBWeather">7:12 PM</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="shared-day-grid" id="sharedDayGrid">
+            <!-- sd-hero, sd-side, sd-strip are rendered by app.js from MOMENTS data, in this exact structural order -->
+          </div>
+        </div>
+
+        <!-- I NEED YOU — right after Shared Day: "if I need them, I can say so"
+             belongs to the same primary loop as seeing the day, not buried
+             under passive discovery content. -->
+        <div data-home-card="needYou" class="container">
+          <section class="section" style="padding-top:0">
+            <div class="need-you">
+              <div class="need-you-head">
+                <p class="eyebrow">I Need You</p>
+                <p id="needYouIntro"></p>
+              </div>
+
+              <!-- What your partner just asked for — only appears when they send a request. -->
+              <div class="need-incoming" id="needIncoming" hidden data-no-page-swipe aria-live="polite"></div>
+
+              <button class="need-primary" id="needPrimaryBtn" type="button" data-no-page-swipe>
+                <span class="need-primary-avatar" id="needPrimaryAvatar" aria-hidden="true">M</span>
+                <span class="need-primary-copy">
+                  <span class="need-primary-title" id="needPrimaryTitle"></span>
+                  <span class="need-primary-sub" id="needPrimarySub"></span>
+                </span>
+                <span class="need-primary-play" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="16" height="16"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+                </span>
+              </button>
+
+              <p class="need-secondary-label" id="needSecondaryLabel">Or tell Mira what today feels like</p>
+              <div class="need-grid" id="needGrid" data-no-page-swipe>
+                <!-- rendered by app.js from NEED_YOU data — clicking opens the request composer -->
+              </div>
+              <p class="need-sent-line" id="needSentLine" hidden></p>
+              <p class="need-mine" id="needMineLine" data-no-page-swipe></p>
+              <button type="button" class="ambient-link need-history-link" id="needHistoryBtn" hidden>Everything you two have asked for</button>
+            </div>
+          </section>
+        </div>
+
+        <!-- THINKING OF YOU -->
+        <div data-home-card="thinking" class="container">
+          <section class="section" style="padding-top:0">
+            <p class="eyebrow">Thinking of you</p>
+            <p class="body-s" style="margin-top:4px">Tap to say you're thinking of them. No words needed.</p>
+            <div class="notes-row" id="notesRow" style="margin-top:14px">
+              <!-- rendered by app.js -->
+            </div>
+            <div class="thinking-quick-row">
+              <button type="button" class="thinking-quick-btn" id="thinkingQuickBtn" data-no-page-swipe>
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 20s-7-4.35-9.5-8.5C.5 7.5 3 4 6.5 4c2 0 3.5 1.3 4.5 2.8C12 4.3 13.5 3 15.5 3 19 3 21.5 6.5 19.5 8.5 17 12.65 12 20 12 20z"/></svg>
+                <span id="thinkingQuickLabel">Thinking of Mira</span>
+              </button>
+            </div>
+            <form class="note-compose" id="noteForm">
+              <label class="visually-hidden" for="noteInput">Or add a little more, if you want to</label>
+              <input id="noteInput" type="text" placeholder="Or add a few words, if you want to…" maxlength="120">
+              <button type="submit">Send</button>
+            </form>
+          </section>
+        </div>
+
+        <!-- DAILY QUESTION — a small just-the-two-of-you prompt, answer-then-
+             reveal so seeing their answer always costs you your own first. -->
+        <div data-home-card="dailyQuestion" class="container">
+          <section class="section" style="padding-top:0">
+            <div class="dq-head">
+              <div>
+                <p class="eyebrow">Daily Question</p>
+                <h2 class="disp-2">Just for the two of you.</h2>
+              </div>
+              <button type="button" class="link-more" style="border:none;background:none;cursor:pointer" id="dqArchiveBtn" hidden>Past answers →</button>
+            </div>
+
+            <div class="dq-flip" id="dqFlip">
+              <div class="dq-flip-inner" id="dqFlipInner">
+                <div class="dq-face dq-face-front">
+                  <p class="dq-question" id="dqQuestionFront"></p>
+                  <label class="visually-hidden" for="dqAnswerInput">Your answer</label>
+                  <textarea id="dqAnswerInput" class="dq-answer-input" placeholder="Your answer…" maxlength="300"></textarea>
+                  <div class="dq-front-footer">
+                    <span class="body-s" id="dqFrontHint">Answer first, then see theirs. <button type="button" class="ambient-link" id="dqSwapBtn" hidden>Ask us something else</button></span>
+                    <button type="button" class="btn-primary" id="dqRevealBtn" disabled>Reveal both →</button>
+                  </div>
+                </div>
+                <div class="dq-face dq-face-back">
+                  <p class="dq-question dq-question--small" id="dqQuestionBack"></p>
+                  <div class="dq-answers">
+                    <div class="dq-answer-block">
+                      <span class="dq-answer-who">You</span>
+                      <p id="dqAnswerYou"></p>
+                    </div>
+                    <div class="dq-answer-block">
+                      <span class="dq-answer-who" id="dqAnswerPartnerLabel">Mira</span>
+                      <p id="dqAnswerPartner"></p>
+                    </div>
+                  </div>
+                  <button type="button" class="btn-ghost dq-flip-back" id="dqFlipBackBtn">← Edit your answer</button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- TOGETHER — a small game and an idea for tonight. -->
+        <div data-home-card="together" class="container">
+          <section class="section" style="padding-top:0">
+            <div class="dq-head">
+              <p class="eyebrow">Together</p>
+              <h2 class="disp-2">Something for the two of you.</h2>
+            </div>
+            <div class="together-grid">
+              <div class="together-card" id="quizCard">
+                <p class="eyebrow">Know each other</p>
+                <div id="quizBody"></div>
+              </div>
+              <div class="together-card together-card--hold" id="holdCard" data-no-page-swipe>
+                <p class="eyebrow">Hold together</p>
+                <button type="button" class="hold-btn" id="holdBtn" aria-label="Press and hold">
+                  <span class="hold-ring" aria-hidden="true"></span>
+                  <svg viewBox="0 0 24 24" width="44" height="44" aria-hidden="true"><path d="M12 20.5s-7.2-4.4-9.6-8.7C.6 8.4 2.6 4.5 6.4 4.5c2.1 0 3.6 1.2 4.6 2.7 1-1.5 2.5-2.7 4.6-2.7 3.8 0 5.8 3.9 4 7.3-2.4 4.3-7.6 8.7-7.6 8.7z"/></svg>
+                </button>
+                <p class="hold-line" id="holdLine" role="status"></p>
+                <p class="body-s" id="holdBest"></p>
+              </div>
+              <div class="together-card" id="gardenCard">
+                <p class="eyebrow">Our garden</p>
+                <div class="garden-bed" id="gardenBed"></div>
+                <p class="together-title" id="gardenCount" style="font-size:1.1rem"></p>
+                <p class="body-m" id="gardenNext"></p>
+                <p class="body-s" id="gardenToday"></p>
+              </div>
+              <div class="together-card" id="dateIdeaCard">
+                <p class="eyebrow">A date for tonight</p>
+                <p class="together-title" id="dateIdeaTitle"></p>
+                <p class="body-m" id="dateIdeaDesc"></p>
+                <div class="together-actions">
+                  <button type="button" class="btn-ghost" id="dateIdeaAnother">Another idea</button>
+                  <button type="button" class="btn-primary" id="dateIdeaPlan">Plan this</button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Everything below is the same day, seen a different way — kept
+             lighter so it reads as "more," not a fifth thing to learn. -->
+        <div class="container">
+          <p class="home-more-divider"><span>More from today</span></p>
+        </div>
+
+        <!-- PARALLEL MOMENTS -->
+        <div data-home-card="parallel" class="container">
+          <section class="section" id="parallelSection" style="padding-top:0">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Parallel Moments</p>
+                <h2 class="disp-2">Two places. <em>One moment.</em></h2>
+              </div>
+            </div>
+
+            <div class="parallel" id="parallelBlock">
+              <p class="parallel-live" aria-live="off"><span class="par-dot" aria-hidden="true"></span><span>Live</span><span class="par-live-text" id="parallelLiveText"></span></p>
+              <div class="parallel-frame" id="parallelFrame"><!-- rendered by app.js --></div>
+              <p class="parallel-caption" id="parallelCaption"></p>
+              <button type="button" class="btn-primary btn-glow par-share" id="parallelShare">Share your side, right now</button>
+            </div>
+          </section>
+        </div>
+
+        <!-- DAY STORY — memories accumulating, not task progress -->
+        <div data-home-card="dayStory" class="container">
+          <section class="section" style="padding-top:0">
+            <div class="day-story">
+              <p class="eyebrow">Becoming a story</p>
+              <div class="day-story-timeline" id="dayStoryTimeline">
+                <!-- rendered by app.js -->
+              </div>
+              <p class="day-story-chapter" id="dayStoryChapter">"September 28 — apart"</p>
+            </div>
+          </section>
+        </div>
+      </div><!-- /coupleLiveWrap -->
+
+      <!-- FIRST CHAPTER — one contextual action, not a 3-card checklist -->
+      <div class="container">
+        <div class="first-chapter" id="firstChapterBanner">
+          <div>
+            <p class="eyebrow">First Chapter</p>
+            <p class="first-chapter-text" id="firstChapterText">Your space is almost yours.</p>
+          </div>
+          <button class="first-chapter-cta" id="firstChapterCta" type="button" data-action="open-import">Bring your history →</button>
+        </div>
+      </div>
+
+      <!-- IMPORT YOUR MEMORIES -->
+      <div data-home-card="import" class="container">
+        <section class="section" style="padding-top:0">
+          <div class="import-block">
+            <div class="import-copy">
+              <p class="eyebrow">Your story started before Pairlum</p>
+              <h2 class="disp-2" style="color:#fff">Bring the moments that got you here.</h2>
+              <p>Add the photos and voice notes already on your phones, in the order you lived them.</p>
+              <button class="import-cta" data-action="open-import" type="button" data-no-page-swipe>Bring your story home →</button>
+            </div>
+            <div class="import-stack" aria-hidden="true">
+              <div class="card photo photo--first-photo"></div>
+              <div class="card photo photo--reunion"></div>
+              <div class="card photo photo--sunset-two"></div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- RESURFACED MEMORY -->
+      <div data-home-card="resurfaced" class="container">
+        <section class="section" style="padding-top:0">
+          <p class="eyebrow">From your story</p>
+          <div class="resurfaced" style="margin-top:14px">
+            <div class="photo photo--airport"></div>
+            <div class="moment-scrim"></div>
+            <div class="moment-meta">
+              <span class="mono" style="color:rgba(255,255,255,.7)">11 months ago today</span>
+              <h3 class="disp-2">The night before your flight home.</h3>
+              <p class="body-m">Ahmedabad Airport · departures, 11:52 PM</p>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- UPCOMING — interactive: the ring is a tappable visual, not just a
+           number. Its fill is a decorative sense of "getting closer" (not a
+           precisely tracked cycle); tapping reveals the exact date beneath. -->
+      <div data-home-card="reunion" class="container">
+        <section class="section" style="padding-top:0">
+          <div class="upcoming">
+            <div>
+              <p class="eyebrow">Upcoming</p>
+              <p class="body-l" id="reunionLine" style="margin-top:6px;color:var(--ink)">Until you're in the same city again.</p>
+              <p class="reunion-detail" id="reunionDetail" hidden></p>
+              <button type="button" class="ambient-link" id="reunionEditBtn">Change this</button>
+            </div>
+            <button type="button" class="reunion-ring" id="reunionRing" aria-expanded="false">
+              <svg viewBox="0 0 120 120" width="120" height="120" aria-hidden="true">
+                <circle class="reunion-ring-track" cx="60" cy="60" r="52"></circle>
+                <circle class="reunion-ring-progress" id="reunionRingProgress" cx="60" cy="60" r="52"></circle>
+              </svg>
+              <span class="count" id="reunionCount">43<sup>days</sup></span>
+              <span class="reunion-ring-hint">Tap for the date</span>
+            </button>
+          </div>
+
+          <!-- PLANS — a call or a movie night, shown in both partners' own time. -->
+          <div class="plans" id="plansBlock">
+            <div class="section-head" style="margin-bottom:12px">
+              <h3 class="disp-3">Plans together</h3>
+              <button type="button" class="link-more" style="border:none;background:none;cursor:pointer" id="addPlanBtn">+ Add a plan</button>
+            </div>
+            <ul class="plans-list" id="plansList"></ul>
+          </div>
+        </section>
+      </div>
+
+      <!-- RELATIONSHIP HISTORY PREVIEW -->
+      <div data-home-card="history" class="container">
+        <section class="section" style="padding-top:0">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Since you started</p>
+              <h2 class="disp-2">Our Story</h2>
+            </div>
+            <a class="link-more" href="#" data-view-link="story">Open Our Story →</a>
+          </div>
+          <div class="history-row">
+            <div class="history-tile"><div class="photo photo--reunion"></div><div class="moment-scrim"></div><div class="moment-meta"><span class="mono" style="color:rgba(255,255,255,.75)">Jun 2024</span><p class="moment-caption">First reunion</p></div></div>
+            <div class="history-tile"><div class="photo photo--desk"></div><div class="moment-scrim"></div><div class="moment-meta"><span class="mono" style="color:rgba(255,255,255,.75)">Feb 2024</span><p class="moment-caption">Long distance begins</p></div></div>
+            <div class="history-tile"><div class="photo photo--sunset-two"></div><div class="moment-scrim"></div><div class="moment-meta"><span class="mono" style="color:rgba(255,255,255,.75)">Aug 2023</span><p class="moment-caption">Our first year</p></div></div>
+            <div class="history-tile"><div class="photo photo--first-photo"></div><div class="moment-scrim"></div><div class="moment-meta"><span class="mono" style="color:rgba(255,255,255,.75)">Mar 2022</span><p class="moment-caption">Where it started</p></div></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- PAIRLUM BOOK TEASER -->
+      <div data-home-card="book" class="container">
+        <section class="section" style="padding-top:0 ; padding-bottom:88px">
+          <div class="book-teaser">
+            <div class="book-cover" aria-hidden="true">P</div>
+            <div>
+              <p class="eyebrow">Quietly becoming</p>
+              <p class="body-l" style="color:var(--ink)">A book of how you lived this — not just the photos you saved.</p>
+            </div>
+            <a class="link-more" href="#" data-book-jump>See all 44 pages →</a>
+          </div>
+        </section>
+      </div>
+
+    </section>
+
+    <!-- ================================================================
+         OUR STORY VIEW
+         ================================================================ -->
+    <section class="view" id="view-story" data-view-panel="story">
+      <div class="container">
+        <div class="hero" style="padding-bottom:10px">
+          <p class="eyebrow">Since 12 March 2022</p>
+          <h1 class="disp-1">Our Story.</h1>
+          <p class="body-l" style="margin-top:10px;max-width:52ch">Your shared days, memories, and milestones — all in one place.</p>
+          <p class="story-payoff-line" id="storyPayoffLine">This is where it adds up.</p>
+        </div>
+
+        <section class="section" style="padding-top:16px">
+          <div class="section-head">
+            <h2 class="disp-3">Chapters</h2>
+            <button type="button" class="link-more" style="border:none;background:none;cursor:pointer" id="addChapterBtn">+ Add chapter</button>
+          </div>
+
+          <!-- Interactive timeline scrubber: a dot per chapter, positioned by
+               how long ago it was. Hover/focus a dot for its date; click to
+               jump to that chapter below. -->
+          <div class="story-scrubber" id="storyScrubber" role="list" aria-label="Jump to a chapter">
+            <div class="story-scrubber-track" aria-hidden="true"></div>
+            <!-- dots rendered by app.js -->
+            <div class="story-scrubber-tip" id="storyScrubberTip" hidden></div>
+          </div>
+
+          <div class="grid-3" id="chaptersGrid">
+            <!-- rendered by app.js -->
+          </div>
+        </section>
+
+        <!-- TIMELINE — every imported memory and shared moment, in date order,
+             grouped by chapter and month. Same for both partners. -->
+        <section class="section" style="padding-top:0">
+          <div class="section-head">
+            <div>
+              <h2 class="disp-3">Timeline</h2>
+              <span class="someday-count" id="tlCount"></span>
+            </div>
+            <button type="button" class="link-more" style="border:none;background:none;cursor:pointer" id="tlImportBtn" data-action="open-import">+ Import memories</button>
+          </div>
+          <button type="button" class="voice-find-btn" id="voiceFindBtn">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+            <span>Find a voice note</span>
+          </button>
+          <div class="tl-collections" id="tlCollections" hidden></div>
+          <div class="tl-years" id="tlYears" hidden></div>
+          <button type="button" class="tl-order" id="tlOrderBtn" hidden>Showing oldest first</button>
+          <div class="tl" id="memoryTimeline"></div>
+        </section>
+      </div>
+    </section>
+
+    <!-- ================================================================
+         LETTERS VIEW
+         ================================================================ -->
+    <section class="view letters-gated" id="view-letters" data-view-panel="letters">
+      <!-- A tap-to-open gate in front of the letters themselves, once per
+           visit to this tab — opening it is its own small moment, the same
+           way opening a mailbox is, rather than a list that's just "there". -->
+      <div class="container letters-gate" id="lettersGate">
+        <button type="button" class="letters-gate-btn" id="lettersGateBtn">
+          <span class="folded-letter" aria-hidden="true">
+            <span class="folded-letter-page">
+              <span class="folded-letter-rule"></span>
+              <span class="folded-letter-initial">&amp;</span>
+            </span>
+            <span class="folded-letter-hearts">♥ ♥ ♥</span>
+          </span>
+          <span class="letters-gate-label">Tap to open your letters</span>
+        </button>
+      </div>
+
+      <div class="container letters-content" id="lettersContent">
+        <div class="hero" style="padding-bottom:10px">
+          <p class="eyebrow">For later</p>
+          <h1 class="disp-1">Letters.</h1>
+          <p class="body-l" style="margin-top:10px;max-width:50ch">Written now, opened when it's time. Some are dated. Some just wait.</p>
+        </div>
+
+        <section class="section" style="padding-top:10px">
+          <ul id="lettersList">
+            <!-- rendered by app.js -->
+          </ul>
+          <button class="btn-ghost" style="margin-top:20px" data-action="open-letter" type="button">Write a letter</button>
+        </section>
+      </div>
+    </section>
+
+    <!-- ================================================================
+         US VIEW
+         ================================================================ -->
+    <section class="view" id="view-us" data-view-panel="us">
+      <div class="container">
+        <section class="section" style="padding-bottom:20px">
+          <div class="us-profile">
+            <span class="us-avatar" aria-hidden="true"></span>
+            <div>
+              <h1 class="disp-2" id="usCoupleNames">Aarav &amp; Mira</h1>
+              <p class="body-s" id="usProfileMeta">Ahmedabad · Berlin · together since 12 March 2022</p>
+            </div>
+          </div>
+
+          <!-- Two-partner preview — stands in for login until accounts are connected. -->
+          <div class="viewing-as" id="viewingAs">
+            <span>Two-partner preview · you are <b id="viewingAsName">Aarav</b></span>
+            <a id="viewingAsOpen" href="?as=mira" target="_blank" rel="noopener">Open Mira's side in a new tab</a>
+            <a id="demoYearLink" href="?demo=year">See this space after a full year</a>
+          </div>
+
+          <div class="us-stats">
+            <div class="us-stat"><b id="statYears">4</b><span>years together</span></div>
+            <div class="us-stat"><b id="statMoments">612</b><span>shared moments</span></div>
+            <div class="us-stat"><b id="statReunionDays">43</b><span>days to reunion</span></div>
+          </div>
+
+        </section>
+
+        <div class="us-tabs" role="tablist" aria-label="Us sections">
+          <button type="button" role="tab" class="us-tab is-active" id="usTabTogether" aria-selected="true" aria-controls="usPanelTogether" data-us-tab="together">Together</button>
+          <button type="button" role="tab" class="us-tab" id="usTabSettings" aria-selected="false" aria-controls="usPanelSettings" data-us-tab="settings">Settings</button>
+        </div>
+
+        <div class="us-panel" id="usPanelTogether" role="tabpanel" aria-labelledby="usTabTogether">
+        <!-- OUR DNA — how the two of you move, in your own words. -->
+        <section class="section" style="padding-top:0">
+          <div class="section-head">
+            <h2 class="disp-3">Our DNA</h2>
+            <button type="button" class="link-more" style="border:none;background:none;cursor:pointer" data-action="open-dna">Open →</button>
+          </div>
+          <button type="button" class="dna-card" id="dnaCard" data-action="open-dna">
+            <span class="eyebrow" id="dnaCardEyebrow">How you two move</span>
+            <span class="dna-card-line" id="dnaCardLine"></span>
+            <span class="dna-card-chips" id="dnaCardChips"></span>
+            <span class="dna-card-hint" id="dnaCardHint"></span>
+          </button>
+        </section>
+
+        <!-- IMPORTANT DATES — anniversary + both birthdays, always present,
+             plus anything either of you adds. Feeds the Home reminder banner. -->
+        <section class="section" style="padding-top:0">
+          <div class="section-head">
+            <h2 class="disp-3">Important dates</h2>
+            <button type="button" class="link-more" style="border:none;background:none;cursor:pointer" id="addDateBtn">+ Add a date</button>
+          </div>
+          <ul class="dates-list" id="datesList">
+            <!-- rendered by app.js -->
+          </ul>
+        </section>
+
+        <!-- LITTLE THINGS TO REMEMBER — the small facts worth knowing from far away. -->
+        <section class="section" style="padding-top:0">
+          <div class="section-head"><h2 class="disp-3">Little things to remember</h2></div>
+          <p class="eyebrow" id="factsTheirsTitle">About Mira</p>
+          <ul class="facts-list" id="factsTheirs"></ul>
+          <details class="facts-mine">
+            <summary>Write yours</summary>
+            <div class="facts-edit" id="factsMine"></div>
+          </details>
+        </section>
+
+        <!-- SOMEDAY LIST — things the two of you want to do together. Either of
+             you can add or tick one off; only the person who added it can remove it. -->
+        <section class="section" style="padding-top:0">
+          <div class="section-head">
+            <h2 class="disp-3">Our someday list</h2>
+            <span class="someday-count" id="somedayCount"></span>
+          </div>
+          <ul class="someday-list" id="somedayList"></ul>
+          <form class="note-compose" id="somedayForm">
+            <label class="visually-hidden" for="somedayInput">Add something to do together</label>
+            <input id="somedayInput" type="text" placeholder="Something to do together, someday…" maxlength="90">
+            <button type="submit">Add</button>
+          </form>
+        </section>
+
+        <!-- PAIRLUM BOOK — the full 44-page preview, made from this couple's own space. -->
+        <section class="section book-section" style="padding-top:0;padding-bottom:100px" id="bookSection">
+          <div class="section-head">
+            <h2 class="disp-3">Keep it forever</h2>
+            <button class="link-more" style="border:none;background:none;cursor:pointer" data-action="open-membership" id="bookTeaserBtn">How to get yours →</button>
+          </div>
+          <p class="body-m book-lede">After a full year on the Book membership, the days you kept become a printed Pairlum Book. This is yours so far — all 44 pages, cover to cover.</p>
+          <p class="body-s book-status" id="bookStatusLine"></p>
+          <div id="bookViewer"></div>
+          <p class="body-s book-note">A preview made from what the two of you have kept. Pages you haven't filled yet show a sample line, marked “sample” beside the page number.</p>
+        </section>
+        </div>
+
+        <div class="us-panel" id="usPanelSettings" role="tabpanel" aria-labelledby="usTabSettings" hidden>
+        <section class="section" style="padding-top:0">
+
+          <p class="settings-group">The two of you</p>
+          <ul class="settings-list">
+            <li><button type="button" data-action="open-profile">Profile <span class="chev" id="profileChev">→</span></button></li>
+            <li><button type="button" id="pairingSettingsBtn" data-action="open-pairing">Partner &amp; pairing <span class="chev" id="pairingChev">→</span></button></li>
+            <li><button type="button" data-action="open-reunion-settings">Reunion &amp; countdown <span class="chev" id="reunionChev">→</span></button></li>
+            <li><button type="button" data-action="open-dna">Our DNA <span class="chev" id="dnaChev">→</span></button></li>
+          </ul>
+
+          <p class="settings-group">Look &amp; feel</p>
+          <ul class="settings-list">
+            <li><button type="button" id="appearanceSettingsBtn" data-action="open-appearance">Appearance <span class="chev" id="appearanceChev">→</span></button></li>
+            <li><button type="button" data-action="open-customize">Customize your space <span class="chev" id="customizeChev">→</span></button></li>
+            <li><button type="button" data-action="open-performance">Performance &amp; quality <span class="chev" id="perfChev">→</span></button></li>
+          </ul>
+
+          <details class="settings-more">
+            <summary>Quick switches <span class="chev">Sound, petals, motion →</span></summary>
+            <ul class="settings-list">
+            <li><button type="button" id="soundToggle" data-toast="Sound turned on.">Sound <span class="chev">On →</span></button></li>
+            <li><button type="button" id="petalsToggle">Falling petals <span class="chev">On →</span></button></li>
+            <li><button type="button" id="motionLevelToggle">Animations <span class="chev">Full →</span></button></li>
+            <li><button type="button" id="reducedMotionToggle" data-toast="Reduced motion turned on.">Reduced motion <span class="chev">Off →</span></button></li>
+            <li><button type="button" id="tapFeedbackToggle">Tap feedback <span class="chev">On →</span></button></li>
+            </ul>
+          </details>
+
+          <p class="settings-group">Notifications</p>
+          <ul class="settings-list">
+            <li><button type="button" data-action="open-inbox">What's new <span class="chev" id="inboxChev">→</span></button></li>
+            <li><button type="button" id="notifSettingsBtn" data-action="open-notifications">Notifications &amp; quiet hours <span class="chev" id="notifChev">→</span></button></li>
+          </ul>
+
+          <p class="settings-group">Privacy &amp; account</p>
+          <ul class="settings-list">
+            <li><button type="button" id="privacySettingsBtn" data-action="open-privacy">Privacy &amp; relationship controls <span class="chev">→</span></button></li>
+            <li><button type="button" data-action="open-membership">Membership <span class="chev" id="membershipChev">→</span></button></li>
+          </ul>
+
+          <p class="settings-group">Help</p>
+          <ul class="settings-list">
+            <li><button type="button" data-action="open-about">Help &amp; contact <span class="chev">→</span></button></li>
+            <li><button type="button" id="replayTipsBtn">Replay first-time tips <span class="chev">→</span></button></li>
+            <li><button type="button" id="simulateOfflineToggle">Simulate offline (demo) <span class="chev">Off →</span></button></li>
+          </ul>
+          <p class="settings-note">"Simulate offline" is just a test for this prototype, not a real setting.</p>
+        </section>
+        <section class="section" style="padding-top:0;padding-bottom:100px" id="founderSection">
+          <div class="section-head"><h2 class="disp-3">Shape Pairlum</h2></div>
+          <div class="founder-panel" id="founderPanel">
+            <span class="founder-badge">You have direct founder access</span>
+            <p class="body-l" style="color:var(--ink)">Shape Pairlum</p>
+            <p class="body-m">Tell us what to keep, fix, or build next.</p>
+            <div class="founder-actions">
+              <button type="button" data-toast="Noted for this session — this prototype doesn't send reactions to the founders yet.">I love this</button>
+              <button type="button" data-toast="Noted for this session — this prototype doesn't send reactions to the founders yet.">Improve this</button>
+              <button type="button" data-toast="Noted for this session — this prototype doesn't send reactions to the founders yet.">Remove this</button>
+              <a class="btn-talk-founders" href="mailto:pairlum.co@gmail.com?subject=Shape%20Pairlum" style="display:inline-block;border:1px solid var(--line);border-radius:999px;padding:10px 18px;font-size:.86rem;color:var(--ink);text-decoration:none">Talk to the founders</a>
+            </div>
+            <form class="founder-wish" id="wishForm">
+              <label class="visually-hidden" for="wishInput">I wish Pairlum could…</label>
+              <input id="wishInput" type="text" placeholder="I wish Pairlum could…" maxlength="140">
+              <button type="submit">Send</button>
+            </form>
+          </div>
+        </section>
+
+        </div>
+      </div>
+    </section>
+
+  </div><!-- /viewTrack -->
+  </main>
+
+  <!-- ============ PRIMARY ACTION ============ -->
+  <button class="fab" id="fabAdd" type="button" aria-label="Add a moment" data-action="open-capture" data-no-page-swipe>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+  </button>
+
+  <!-- ============ BOTTOM NAV (mobile) ============ -->
+  <nav class="bottom-nav mobile-only" aria-label="Primary">
+    <button class="nav-btn is-active" data-view="home" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9h12v-9"/></svg>
+      Home
+    </button>
+    <button class="nav-btn" data-view="story" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 4h11a2 2 0 0 1 2 2v14l-7.5-4L5 20V6a2 2 0 0 1 2-2Z"/></svg>
+      Our Story
+    </button>
+    <span class="nav-spacer" aria-hidden="true"></span>
+    <button class="nav-btn" data-view="letters" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="m4 7 8 6 8-6"/></svg>
+      Letters
+    </button>
+    <button class="nav-btn" data-view="us" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="9" cy="9" r="3"/><circle cx="16" cy="10" r="2.4"/><path d="M3.5 19c.6-3 2.6-4.6 5.5-4.6s4.9 1.6 5.5 4.6M14.3 14.7c2.2.1 3.7 1.6 4.2 4.3"/></svg>
+      Us
+    </button>
+  </nav>
+
+  <!-- ============ ADD MOMENT SHEET ============ -->
+  <div class="overlay" id="captureOverlay" role="dialog" aria-modal="true" aria-labelledby="captureTitle">
+    <div class="sheet">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="captureTitle">Share this tiny part of your day</h2>
+        <button class="sheet-close" type="button" data-close-overlay="captureOverlay" aria-label="Close">✕</button>
+      </div>
+
+      <div class="capture-types" id="captureTypes">
+        <button class="capture-type is-selected" data-type="voice" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+          Voice
+        </button>
+        <button class="capture-type" data-type="photo" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="12" r="3.2"/></svg>
+          Photo
+        </button>
+        <button class="capture-type" data-type="video" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg>
+          Clip
+        </button>
+        <button class="capture-type" data-type="text" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 5h14M5 12h14M5 19h9"/></svg>
+          Words
+        </button>
+      </div>
+
+      <input type="file" accept="image/*" id="capturePhotoInput" style="display:none">
+      <input type="file" accept="video/*" id="captureVideoInput" style="display:none">
+
+      <p class="capture-parallel-note" id="captureParallelNote" hidden></p>
+      <div id="captureBody"><!-- rendered by app.js --></div>
+
+      <p class="capture-status-line" id="captureStatusLine" hidden></p>
+
+      <div class="capture-footer">
+        <span class="body-s" id="captureFooterNote">Only <span id="captureFooterPartner">Mira</span> will see this, the moment it's posted.</span>
+        <button class="btn-primary" id="captureSubmit" type="button">Add to today</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ I NEED YOU REVEAL SHEET ============ -->
+  <div class="overlay" id="needOverlay" role="dialog" aria-modal="true" aria-labelledby="needTitle">
+    <div class="sheet need-reveal">
+      <div class="sheet-head">
+        <span class="eyebrow" style="color:var(--gold-soft)">I Need You</span>
+        <button class="sheet-close" type="button" data-close-overlay="needOverlay" aria-label="Close">✕</button>
+      </div>
+      <div class="need-reveal-body" id="needRevealBody">
+        <span class="need-reveal-avatar" aria-hidden="true">M</span>
+        <h3 id="needTitle"></h3>
+        <p id="needRevealSub"></p>
+        <div class="voice-moment">
+          <button class="voice-play" id="needVoicePlay" type="button" aria-label="Play voice message">
+            <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          </button>
+          <div class="waveform" id="needWaveform" aria-hidden="true"></div>
+          <div class="voice-meta">
+            <span class="body-s" style="color:rgba(255,255,255,.8)" id="needRevealMeta"></span>
+          </div>
+        </div>
+        <span class="need-reveal-timestamp" id="needRevealTimestamp"></span>
+        <div class="need-response-options" id="needResponseOptions">
+          <button type="button" data-need-response="helped">Tell them it helped</button>
+          <button type="button" data-need-response="voice">Send a voice note back</button>
+          <button type="button" data-need-response="none">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ I NEED YOU — REQUEST SIDE ("I could use…") ============ -->
+  <div class="overlay" id="needRequestOverlay" role="dialog" aria-modal="true" aria-labelledby="needRequestTitle">
+    <div class="sheet need-request-sheet">
+      <div class="sheet-head">
+        <span class="eyebrow" style="color:var(--wine-text)">I Need You</span>
+        <button class="sheet-close" type="button" data-close-overlay="needRequestOverlay" aria-label="Close">✕</button>
+      </div>
+      <h3 id="needRequestTitle" class="disp-3">What would help right now?</h3>
+      <div class="need-request-options" id="needRequestOptions">
+        <!-- rendered by app.js from NEED_YOU data -->
+      </div>
+
+      <label class="need-request-field-label" for="needRequestNote">Say a little more, if you want to</label>
+      <textarea id="needRequestNote" class="need-request-note" placeholder="Optional — a line about what's going on…" maxlength="200"></textarea>
+
+      <div class="need-request-voice-row">
+        <button type="button" class="need-voice-record" id="needRequestVoiceBtn">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+          <span id="needRequestVoiceLabel">Add a short voice request</span>
+        </button>
+        <span class="need-voice-status" id="needRequestVoiceStatus"></span>
+      </div>
+
+      <label class="need-no-reply">
+        <input type="checkbox" id="needNoReplyCheck" checked>
+        <span>No reply needed</span>
+      </label>
+      <label class="need-no-reply need-urgent">
+        <input type="checkbox" id="needUrgentCheck">
+        <span id="needUrgentText">This can't wait</span>
+      </label>
+
+      <div class="capture-footer">
+        <span class="body-s" id="needRequestHint">Only <span id="needRequestPartnerName">Mira</span> will see this.</span>
+        <button class="btn-primary" id="needRequestSend" type="button" disabled>Send</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ A MESSAGE FOR THEIR HARD DAYS — recorded ahead of time ============ -->
+  <div class="overlay" id="comfortOverlay" role="dialog" aria-modal="true" aria-labelledby="comfortTitle">
+    <div class="sheet" style="max-width:520px">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="comfortTitle">A message for their hard days</h2>
+        <button class="sheet-close" type="button" data-close-overlay="comfortOverlay" aria-label="Close">✕</button>
+      </div>
+      <p class="body-m" id="comfortStatus"></p>
+      <div class="need-request-voice-row" style="margin-top:16px">
+        <button type="button" class="need-voice-record" id="comfortRecBtn">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+          <span id="comfortRecLabel">Start recording</span>
+        </button>
+      </div>
+      <audio id="comfortPreview" controls hidden style="width:100%;margin-top:14px"></audio>
+      <div class="capture-footer">
+        <span class="body-s">Saved on this device first, then shown to them.</span>
+        <button class="btn-primary" id="comfortSave" type="button" disabled>Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ EVERYTHING YOU TWO HAVE ASKED FOR ============ -->
+  <div class="overlay" id="needHistoryOverlay" role="dialog" aria-modal="true" aria-labelledby="needHistoryTitle">
+    <div class="sheet" style="max-width:560px">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="needHistoryTitle">I Need You, so far</h2>
+        <button class="sheet-close" type="button" data-close-overlay="needHistoryOverlay" aria-label="Close">✕</button>
+      </div>
+      <div id="needHistoryBody" class="settings-overlay-body"><!-- rendered by app.js --></div>
+    </div>
+  </div>
+
+  <!-- ============ IMPORT MEMORIES FLOW SHEET ============ -->
+  <div class="overlay" id="quizOverlay" role="dialog" aria-modal="true" aria-labelledby="quizQuestion">
+    <div class="sheet" style="max-width:520px">
+      <div class="sheet-head">
+        <p class="eyebrow" id="quizStepLabel">Question 1 of 5</p>
+        <button class="sheet-close" type="button" data-close-overlay="quizOverlay" aria-label="Close">✕</button>
+      </div>
+      <h2 class="disp-3" id="quizQuestion"></h2>
+      <div id="quizOptions"></div>
+      <div class="capture-footer">
+        <span class="body-s">Hidden until you've both played.</span>
+        <button class="btn-primary" id="quizNext" type="button" disabled>Next</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="reunionOverlay" role="dialog" aria-modal="true" aria-labelledby="reunionOverlayTitle">
+    <div class="sheet" style="max-width:480px">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="reunionOverlayTitle">When do you see each other next?</h2>
+        <button class="sheet-close" type="button" data-close-overlay="reunionOverlay" aria-label="Close">✕</button>
+      </div>
+      <div class="mv-edit" style="margin-top:0;padding-top:0;border-top:none">
+        <p class="body-s">How much do you know so far?</p>
+        <div class="plan-ideas" id="reunionPrecision" role="group" aria-label="How precisely you know the reunion">
+          <button type="button" class="period-chip" data-reunion-precision="day">The exact day</button>
+          <button type="button" class="period-chip" data-reunion-precision="month">Just the month</button>
+          <button type="button" class="period-chip" data-reunion-precision="year">Just the year</button>
+        </div>
+        <div id="reunionDayRow">
+          <label class="body-s" for="reunionDateInput">The day</label>
+          <input type="date" class="imp-date" id="reunionDateInput">
+        </div>
+        <div class="reunion-selects">
+          <div id="reunionMonthRow" hidden>
+            <label class="body-s" for="reunionMonthSelect">Month</label>
+            <select class="imp-date" id="reunionMonthSelect"></select>
+          </div>
+          <div id="reunionYearRow" hidden>
+            <label class="body-s" for="reunionYearSelect">Year</label>
+            <select class="imp-date" id="reunionYearSelect"></select>
+          </div>
+        </div>
+        <label class="body-s" for="reunionPlaceInput">Where (optional)</label>
+        <input type="text" class="imp-caption" id="reunionPlaceInput" maxlength="40" placeholder="e.g. Berlin">
+        <p class="body-s">Either of you can set or change this. The countdown updates for both.</p>
+        <p class="body-s imp-pick-note" id="reunionFormNote" role="status"></p>
+        <div class="capture-footer">
+          <button class="btn-ghost" id="reunionClear" type="button" hidden>Clear</button>
+          <button class="btn-primary" id="reunionSave" type="button">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="planOverlay" role="dialog" aria-modal="true" aria-labelledby="planOverlayTitle">
+    <div class="sheet" style="max-width:480px">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="planOverlayTitle">Add a plan</h2>
+        <button class="sheet-close" type="button" data-close-overlay="planOverlay" aria-label="Close">✕</button>
+      </div>
+      <div class="mv-edit" style="margin-top:0;padding-top:0;border-top:none">
+        <label class="body-s" for="planTitleInput">What is it?</label>
+        <input type="text" class="imp-caption" id="planTitleInput" maxlength="48" placeholder="e.g. Video call">
+        <div class="plan-ideas" id="planIdeas">
+          <button type="button" class="period-chip" data-plan-idea="Video call">Video call</button>
+          <button type="button" class="period-chip" data-plan-idea="Movie night">Movie night</button>
+          <button type="button" class="period-chip" data-plan-idea="Dinner together">Dinner together</button>
+          <button type="button" class="period-chip" data-plan-idea="Fall asleep on a call">Fall asleep on a call</button>
+        </div>
+        <label class="body-s" for="planWhenInput" id="planWhenLabel">When, in your time</label>
+        <input type="datetime-local" class="imp-date" id="planWhenInput">
+        <p class="body-s plan-preview" id="planPreview" role="status"></p>
+        <p class="body-s imp-pick-note" id="planFormNote" role="status"></p>
+        <div class="capture-footer">
+          <span></span>
+          <button class="btn-primary" id="planSave" type="button">Add plan</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="chapterOverlay" role="dialog" aria-modal="true" aria-labelledby="chapterOverlayTitle">
+    <div class="sheet" style="max-width:520px">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="chapterOverlayTitle">New chapter</h2>
+        <button class="sheet-close" type="button" data-close-overlay="chapterOverlay" aria-label="Close">✕</button>
+      </div>
+      <div class="ce">
+        <div class="ce-preview" id="chapterPreview" aria-hidden="true">
+          <div class="photo ce-cover" id="chapterPreviewCover"></div>
+          <div class="moment-scrim"></div>
+          <div class="ce-preview-meta">
+            <span class="eyebrow" id="chapterPreviewDates">Since today</span>
+            <p class="ce-preview-title" id="chapterPreviewTitle">Name this chapter</p>
+            <p class="ce-preview-note" id="chapterPreviewNote"></p>
+          </div>
+        </div>
+
+        <p class="ce-label">Cover</p>
+        <div class="ce-covers" id="chapterCovers" role="listbox" aria-label="Chapter cover"></div>
+
+        <label class="ce-label" for="chapterTitleInput">Name</label>
+        <input type="text" class="ce-name" id="chapterTitleInput" maxlength="48" placeholder="e.g. The year we moved" autocomplete="off">
+        <div class="ce-ideas" id="chapterIdeas"></div>
+
+        <label class="ce-label" for="chapterDateInput">The day it began</label>
+        <div class="ce-date">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14" rx="3"/><path d="M8 3.5v4M16 3.5v4M4 10h16"/></svg>
+          <input type="date" id="chapterDateInput">
+        </div>
+        <p class="ce-help" id="chapterRunsLine">It runs until your next chapter starts. Memories are filed under it by their dates.</p>
+
+        <label class="ce-label" for="chapterNoteInput">A few words about it <span class="ce-opt">optional</span></label>
+        <textarea class="ce-note" id="chapterNoteInput" maxlength="200" rows="3" placeholder="What made this stretch yours?"></textarea>
+        <p class="ce-count" id="chapterNoteCount" aria-hidden="true">0 / 200</p>
+
+        <p class="body-s imp-pick-note" id="chapterFormNote" role="status"></p>
+        <div class="ce-footer">
+          <button class="ce-remove" id="chapterDelete" type="button" hidden>
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></svg>
+            <span>Remove chapter</span>
+          </button>
+          <button class="btn-primary" id="chapterSave" type="button">Save chapter</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="memoryOverlay" role="dialog" aria-modal="true" aria-labelledby="memoryViewDate">
+    <div class="sheet" style="max-width:560px">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="memoryViewDate" style="font-size:1.05rem"></h2>
+        <button class="sheet-close" type="button" data-close-overlay="memoryOverlay" aria-label="Close">✕</button>
+      </div>
+      <div class="mv-media" id="memoryViewMedia"></div>
+      <p class="mv-caption" id="memoryViewCaption"></p>
+      <p class="body-s" id="memoryViewBy" style="margin-top:8px"></p>
+      <div class="mv-edit" id="memoryViewEdit" hidden>
+        <label class="body-s" for="memoryViewDateInput">Date it happened</label>
+        <input type="date" class="imp-date" id="memoryViewDateInput">
+        <label class="body-s" for="memoryViewCaptionInput">A line about it</label>
+        <input type="text" class="imp-caption" id="memoryViewCaptionInput" maxlength="80" placeholder="Add a line (optional)">
+        <div class="capture-footer">
+          <button class="btn-ghost" id="memoryViewDelete" type="button">Remove</button>
+          <button class="btn-primary" id="memoryViewSave" type="button">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ONE MOMENT: what was shared, the voice with it, and the answers ============ -->
+  <div class="overlay" id="momentOverlay" role="dialog" aria-modal="true" aria-labelledby="momentTitle">
+    <div class="sheet" style="max-width:560px">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="momentTitle" style="font-size:1.05rem"></h2>
+        <button class="sheet-close" type="button" data-close-overlay="momentOverlay" aria-label="Close">✕</button>
+      </div>
+      <div id="momentBody"><!-- rendered by app.js --></div>
+    </div>
+  </div>
+
+  <!-- ============ FIND A VOICE ============ -->
+  <div class="overlay" id="voiceFindOverlay" role="dialog" aria-modal="true" aria-labelledby="voiceFindTitle">
+    <div class="sheet" style="max-width:580px">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="voiceFindTitle">Find a voice</h2>
+        <button class="sheet-close" type="button" data-close-overlay="voiceFindOverlay" aria-label="Close">✕</button>
+      </div>
+      <label class="visually-hidden" for="voiceFindInput">What are you looking for?</label>
+      <input type="search" class="confirm-input" id="voiceFindInput" placeholder="Say it the way you remember it" autocomplete="off" enterkeyhint="search">
+      <p class="body-s vf-examples">Try: <span id="voiceFindExamples"></span></p>
+      <div id="voiceFindChips"></div>
+      <div class="body-s vf-note" id="voiceFindNote" role="status"></div>
+      <ul class="vf-list" id="voiceFindResults"></ul>
+    </div>
+  </div>
+
+  <div class="overlay" id="importOverlay" role="dialog" aria-modal="true" aria-labelledby="importTitle">
+    <div class="sheet" style="max-width:620px">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="importTitle">Bring your story home</h2>
+        <button class="sheet-close" type="button" data-close-overlay="importOverlay" aria-label="Close">✕</button>
+      </div>
+
+      <div class="import-steps" aria-hidden="true">
+        <div class="step" data-step-indicator="1"><i></i></div>
+        <div class="step" data-step-indicator="2"><i></i></div>
+        <div class="step" data-step-indicator="3"><i></i></div>
+        <div class="step" data-step-indicator="4"><i></i></div>
+      </div>
+
+      <!-- STEP 1: CHOOSE -->
+      <div class="import-step" data-step="1">
+        <p class="eyebrow">Step 1 of 4</p>
+        <h3 class="disp-3" style="margin-top:6px">Choose the photos and videos</h3>
+        <p class="body-m" style="margin-top:8px">Pick as many as you like, from any year. Pairlum reads the date each one was taken and files it in the right place — you don't have to sort anything.</p>
+        <input type="file" id="importFileInput" accept="image/*,video/*" multiple hidden>
+        <div class="imp-sources">
+          <button class="imp-source" id="importPickBtn" type="button">
+            <span class="imp-source-title">From this phone or computer</span>
+            <span class="imp-source-sub">On iPhone this opens your Photos library, iCloud Photos included. On Android, your gallery.</span>
+          </button>
+          <button class="imp-source" id="importGoogleBtn" type="button">
+            <span class="imp-source-title">From Google Photos</span>
+            <span class="imp-source-sub">Sign in, choose the photos on Google's page, and they come straight in.</span>
+          </button>
+        </div>
+        <p class="body-s imp-pick-note" id="importPickNote" role="status"></p>
+        <p class="body-s" style="margin-top:12px">Up to 60 at a time. Only the two of you can see them.</p>
+      </div>
+
+      <!-- STEP 2: READING DATES -->
+      <div class="import-step" data-step="2" hidden>
+        <div class="organize-state">
+          <div class="organize-ring" aria-hidden="true"></div>
+          <div class="organize-lines">
+            <p class="disp-3" style="font-size:1.1rem">Putting these in order</p>
+            <p class="body-s" id="organizeLine" role="status">Reading dates…</p>
+          </div>
+        </div>
+        <a class="btn-primary imp-google-link" id="importGoogleLink" target="_blank" rel="noopener" hidden>Open Google Photos</a>
+      </div>
+
+      <!-- STEP 3: REVIEW -->
+      <div class="import-step" data-step="3" hidden>
+        <p class="eyebrow">Step 3 of 4</p>
+        <h3 class="disp-3" style="margin-top:6px">A quick look before they go in</h3>
+        <p class="body-s" id="importReviewSummary" style="margin:6px 0 12px" role="status"></p>
+        <ul class="imp-list" id="reviewList"><!-- rendered by app.js --></ul>
+      </div>
+
+      <!-- STEP 4: DONE -->
+      <div class="import-step" data-step="4" hidden>
+        <div class="finish-state">
+          <h3 class="disp-3" id="importDoneTitle">Your memories joined Our Story</h3>
+          <p class="body-m" id="importDoneSub" style="margin-top:8px"></p>
+        </div>
+      </div>
+
+      <div class="capture-footer">
+        <button class="btn-ghost" id="importBack" type="button">Back</button>
+        <button class="btn-primary" id="importNext" type="button">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ WRITE A LETTER ============ -->
+  <div class="overlay" id="letterOverlay" role="dialog" aria-modal="true" aria-labelledby="letterTitle">
+    <div class="sheet" style="max-width:520px">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="letterTitle">Write a letter</h2>
+        <button class="sheet-close" type="button" data-close-overlay="letterOverlay" aria-label="Close">✕</button>
+      </div>
+
+      <label class="need-request-field-label" for="letterSubjectInput">What's it called?</label>
+      <input type="text" class="confirm-input" id="letterSubjectInput" placeholder="e.g. Open on your birthday" maxlength="60" style="margin:0 0 14px">
+
+      <label class="need-request-field-label" for="letterBodyInput">Say what you want to say</label>
+      <textarea class="capture-textarea" id="letterBodyInput" placeholder="Write it like you'd say it out loud…" maxlength="4000" style="min-height:160px"></textarea>
+
+      <p class="need-request-field-label" style="margin-top:16px">When should it open?</p>
+      <div class="period-grid" id="letterTimingGrid">
+        <button type="button" class="period-chip is-selected" data-letter-timing="anytime">Unlock right away</button>
+        <button type="button" class="period-chip" data-letter-timing="date">On a specific date</button>
+      </div>
+      <div class="period-custom" id="letterDateRow" hidden style="margin-top:10px">
+        <input type="date" id="letterDateInput">
+      </div>
+
+      <p class="need-request-field-label" style="margin-top:16px">Add a song <span class="letter-optional-tag">Optional</span></p>
+      <input type="text" class="confirm-input" id="letterSongInput" placeholder="Paste a Spotify or YouTube link">
+      <p class="body-s letter-field-hint" id="letterSongHint"></p>
+
+      <p class="need-request-field-label" style="margin-top:16px">Add photos <span class="letter-optional-tag">Optional · up to 3</span></p>
+      <div class="letter-photo-row" id="letterPhotoRow"><!-- rendered by app.js --></div>
+
+      <p class="body-s letter-draft-note" id="letterDraftNote" hidden></p>
+      <div class="capture-footer">
+        <span class="body-s" id="letterFooterNote">Only <span id="letterFooterPartner">Mira</span> will see this, and only once it unlocks.</span>
+        <button class="btn-primary" id="letterSend" type="button" disabled>Seal it</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ READ A LETTER (unlocked letters only) ============ -->
+  <div class="overlay" id="letterPreviewOverlay" role="dialog" aria-modal="true" aria-labelledby="letterPreviewTitle">
+    <div class="sheet letter-preview-sheet" style="max-width:520px">
+      <button class="sheet-close letter-preview-close" type="button" data-close-overlay="letterPreviewOverlay" aria-label="Close">✕</button>
+      <span class="letter-preview-private" aria-hidden="true">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M7.5 11V7.5a4.5 4.5 0 0 1 9 0V11"/></svg>
+        Just us
+      </span>
+      <span class="letter-preview-flourish" aria-hidden="true">❦</span>
+      <h2 class="disp-3 letter-preview-title" id="letterPreviewTitle">Letter</h2>
+      <p class="letter-preview-state" id="letterPreviewState"></p>
+      <div class="letter-preview-photos" id="letterPreviewPhotos" hidden></div>
+      <p class="letter-preview-body" id="letterPreviewBody"></p>
+      <p class="letter-preview-signature" id="letterPreviewSignature"></p>
+      <div class="letter-preview-song" id="letterPreviewSong" hidden></div>
+      <div class="letter-preview-reply" id="letterPreviewReply" hidden>
+        <p class="disp-3 letter-preview-reply-title">Want to write back?</p>
+        <p class="body-s" id="letterPreviewReplyNote">They wrote you something. Maybe it's your turn.</p>
+        <div class="letter-preview-reply-actions">
+          <button class="btn-primary" type="button" id="letterPreviewReplyBtn">Write back</button>
+          <button class="btn-ghost" type="button" data-close-overlay="letterPreviewOverlay">Not now</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ADD A DATE (Important Dates, Us page) ============ -->
+  <div class="overlay" id="addDateOverlay" role="dialog" aria-modal="true" aria-labelledby="addDateTitleHead">
+    <div class="sheet" style="max-width:420px">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="addDateTitleHead">Add a date</h2>
+        <button class="sheet-close" type="button" data-close-overlay="addDateOverlay" aria-label="Close">✕</button>
+      </div>
+      <form id="addDateForm">
+        <label class="need-request-field-label" for="addDateTitle">What's it called?</label>
+        <input type="text" class="confirm-input" id="addDateTitle" placeholder="e.g. The day we met" maxlength="60" style="margin:0 0 14px" required>
+
+        <label class="need-request-field-label" for="addDateInput">When?</label>
+        <input type="date" id="addDateInput" class="confirm-input" style="margin:0 0 6px" required>
+        <p class="body-s" style="color:var(--ink-faint)">Repeats every year on this day.</p>
+
+        <div class="capture-footer">
+          <span class="body-s"></span>
+          <button class="btn-primary" type="submit">Add</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ APPEARANCE / MOOD ============ -->
+  <div class="overlay" id="appearanceOverlay" role="dialog" aria-modal="true" aria-labelledby="appearanceTitle">
+    <div class="sheet" style="max-width:480px">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="appearanceTitle">Appearance</h2>
+        <button class="sheet-close" type="button" data-close-overlay="appearanceOverlay" aria-label="Close">✕</button>
+      </div>
+      <p class="body-s" style="margin:-6px 0 16px">Pick the mood for your space. It's saved on this device.</p>
+      <div class="mood-grid" id="moodGrid" role="radiogroup" aria-label="Mood">
+        <button type="button" class="mood-option" data-mood-id="warm" role="radio" aria-checked="false">
+          <span class="mood-swatch" aria-hidden="true"><i style="background:linear-gradient(135deg,#F7F0EA 50%,#7C1B33 50%)"></i></span>
+          <span class="mood-copy"><h4>Soft &amp; Warm</h4><span class="body-s">For slow mornings and long calls.</span></span>
+          <span class="mood-check" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8l3.5 3.5L13 5"/></svg></span>
+        </button>
+        <button type="button" class="mood-option" data-mood-id="calm" role="radio" aria-checked="false">
+          <span class="mood-swatch" aria-hidden="true"><i style="background:linear-gradient(135deg,#FAF8F6 50%,#9E5F66 50%)"></i></span>
+          <span class="mood-copy"><h4>Calm &amp; Minimal</h4><span class="body-s">For quiet certainty, just the two of you.</span></span>
+          <span class="mood-check" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8l3.5 3.5L13 5"/></svg></span>
+        </button>
+        <button type="button" class="mood-option" data-mood-id="deep" role="radio" aria-checked="false">
+          <span class="mood-swatch" aria-hidden="true"><i style="background:linear-gradient(135deg,#171014 50%,#C9385A 50%)"></i></span>
+          <span class="mood-copy"><h4>Deep &amp; Cinematic</h4><span class="body-s">For late nights and big feelings.</span></span>
+          <span class="mood-check" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8l3.5 3.5L13 5"/></svg></span>
+        </button>
+        <button type="button" class="mood-option" data-mood-id="blush" role="radio" aria-checked="false">
+          <span class="mood-swatch" aria-hidden="true"><i style="background:linear-gradient(135deg,#FFEEF2 50%,#C43A6E 50%)"></i></span>
+          <span class="mood-copy"><h4>Blush</h4><span class="body-s">For new love and butterflies.</span></span>
+          <span class="mood-check" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8l3.5 3.5L13 5"/></svg></span>
+        </button>
+        <button type="button" class="mood-option" data-mood-id="midnight" role="radio" aria-checked="false">
+          <span class="mood-swatch" aria-hidden="true"><i style="background:linear-gradient(135deg,#0F1220 50%,#6D7FFF 50%)"></i></span>
+          <span class="mood-copy"><h4>Midnight</h4><span class="body-s">For the miles between you tonight.</span></span>
+          <span class="mood-check" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8l3.5 3.5L13 5"/></svg></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ PARTNER & PAIRING ============ -->
+  <div class="overlay" id="pairingOverlay" role="dialog" aria-modal="true" aria-labelledby="pairingTitle">
+    <div class="sheet" style="max-width:520px">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="pairingTitle">Partner &amp; pairing</h2>
+        <button class="sheet-close" type="button" data-close-overlay="pairingOverlay" aria-label="Close">✕</button>
+      </div>
+      <div id="pairingBody" class="settings-overlay-body">
+        <!-- rendered by app.js from SPACE.pairing.status -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ NOTIFICATIONS & QUIET HOURS ============ -->
+  <div class="overlay" id="notifOverlay" role="dialog" aria-modal="true" aria-labelledby="notifTitle">
+    <div class="sheet" style="max-width:520px">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="notifTitle">Notifications &amp; quiet hours</h2>
+        <button class="sheet-close" type="button" data-close-overlay="notifOverlay" aria-label="Close">✕</button>
+      </div>
+      <div id="notifBody" class="settings-overlay-body">
+        <!-- rendered by app.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ PRIVACY & RELATIONSHIP CONTROLS ============ -->
+  <div class="overlay" id="privacyOverlay" role="dialog" aria-modal="true" aria-labelledby="privacyTitle">
+    <div class="sheet" style="max-width:640px">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="privacyTitle">Privacy &amp; relationship controls</h2>
+        <button class="sheet-close" type="button" data-close-overlay="privacyOverlay" aria-label="Close">✕</button>
+      </div>
+      <div id="privacyBody" class="settings-overlay-body">
+        <!-- rendered by app.js -->
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ============ WHAT'S NEW (the bell) ============ -->
+  <div class="overlay" id="inboxOverlay" role="dialog" aria-modal="true" aria-labelledby="inboxOverlayTitle">
+    <div class="sheet" style="max-width:520px">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="inboxOverlayTitle">What's new</h2>
+        <button class="sheet-close" type="button" data-close-overlay="inboxOverlay" aria-label="Close">✕</button>
+      </div>
+      <div id="inboxBody" class="settings-overlay-body"><!-- rendered by app.js --></div>
+    </div>
+  </div>
+
+  <!-- ============ PROFILE ============ -->
+  <div class="overlay" id="profileOverlay" role="dialog" aria-modal="true" aria-labelledby="profileOverlayTitle">
+    <div class="sheet" style="max-width:520px">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="profileOverlayTitle">Profile</h2>
+        <button class="sheet-close" type="button" data-close-overlay="profileOverlay" aria-label="Close">✕</button>
+      </div>
+      <div id="profileBody" class="settings-overlay-body"><!-- rendered by app.js --></div>
+    </div>
+  </div>
+
+  <!-- ============ REUNION & COUNTDOWN ============ -->
+  <div class="overlay" id="reunionSettingsOverlay" role="dialog" aria-modal="true" aria-labelledby="reunionSettingsOverlayTitle">
+    <div class="sheet" style="max-width:520px">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="reunionSettingsOverlayTitle">Reunion &amp; countdown</h2>
+        <button class="sheet-close" type="button" data-close-overlay="reunionSettingsOverlay" aria-label="Close">✕</button>
+      </div>
+      <div id="reunionSettingsBody" class="settings-overlay-body"><!-- rendered by app.js --></div>
+    </div>
+  </div>
+
+  <!-- ============ MEMBERSHIP ============ -->
+  <div class="overlay" id="membershipOverlay" role="dialog" aria-modal="true" aria-labelledby="membershipOverlayTitle">
+    <div class="sheet" style="max-width:600px">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="membershipOverlayTitle">Membership</h2>
+        <button class="sheet-close" type="button" data-close-overlay="membershipOverlay" aria-label="Close">✕</button>
+      </div>
+      <div id="membershipBody" class="settings-overlay-body"><!-- rendered by app.js --></div>
+    </div>
+  </div>
+
+  <!-- ============ PERFORMANCE & QUALITY ============ -->
+  <div class="overlay" id="perfOverlay" role="dialog" aria-modal="true" aria-labelledby="perfOverlayTitle">
+    <div class="sheet" style="max-width:520px">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="perfOverlayTitle">Performance &amp; quality</h2>
+        <button class="sheet-close" type="button" data-close-overlay="perfOverlay" aria-label="Close">✕</button>
+      </div>
+      <div id="perfBody" class="settings-overlay-body"><!-- rendered by app.js --></div>
+    </div>
+  </div>
+
+  <!-- ============ HELP & CONTACT ============ -->
+  <div class="overlay" id="aboutOverlay" role="dialog" aria-modal="true" aria-labelledby="aboutOverlayTitle">
+    <div class="sheet" style="max-width:520px">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="aboutOverlayTitle">Help &amp; contact</h2>
+        <button class="sheet-close" type="button" data-close-overlay="aboutOverlay" aria-label="Close">✕</button>
+      </div>
+      <div id="aboutBody" class="settings-overlay-body"><!-- rendered by app.js --></div>
+    </div>
+  </div>
+
+  <!-- ============ CUSTOMIZE YOUR SPACE ============ -->
+  <div class="overlay" id="customizeOverlay" role="dialog" aria-modal="true" aria-labelledby="customizeOverlayTitle">
+    <div class="sheet" style="max-width:560px">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="customizeOverlayTitle">Customize your space</h2>
+        <button class="sheet-close" type="button" data-close-overlay="customizeOverlay" aria-label="Close">✕</button>
+      </div>
+      <div id="customizeBody" class="settings-overlay-body"><!-- rendered by app.js --></div>
+    </div>
+  </div>
+
+  <!-- ============ PAST ANSWERS — every question the two of you answered, with that day's exact question ============ -->
+  <div class="overlay" id="dqArchiveOverlay" role="dialog" aria-modal="true" aria-labelledby="dqArchiveTitle">
+    <div class="sheet" style="max-width:600px">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="dqArchiveTitle">Past answers</h2>
+        <button class="sheet-close" type="button" data-close-overlay="dqArchiveOverlay" aria-label="Close">✕</button>
+      </div>
+      <div id="dqArchiveBody" class="settings-overlay-body"><!-- rendered by app.js --></div>
+    </div>
+  </div>
+
+  <!-- ============ OUR DNA ============ -->
+  <div class="overlay" id="dnaOverlay" role="dialog" aria-modal="true" aria-labelledby="dnaOverlayTitle">
+    <div class="sheet" style="max-width:640px">
+      <div class="sheet-head">
+        <h2 class="disp-3" id="dnaOverlayTitle">Our DNA</h2>
+        <button class="sheet-close" type="button" data-close-overlay="dnaOverlay" aria-label="Close">✕</button>
+      </div>
+      <p class="dna-hero" id="dnaHero"></p>
+      <div class="dna-tabs" id="dnaTabs" role="tablist" aria-label="Our DNA sections" data-no-page-swipe></div>
+      <div id="dnaBody" class="settings-overlay-body"><!-- rendered by app.js --></div>
+    </div>
+  </div>
+
+  <!-- ============ PHOTO VIEWER — a Shared Day photo, whole, on the full screen. Tap anywhere to go back. ============ -->
+  <div class="photo-viewer" id="photoViewer" role="dialog" aria-modal="true" aria-label="Photo" aria-hidden="true">
+    <button class="photo-viewer-close" type="button" id="photoViewerClose" aria-label="Close photo">✕</button>
+    <div class="photo-viewer-stage"><img id="photoViewerImg" alt=""></div>
+    <div class="photo-viewer-meta">
+      <span class="photo-viewer-tag" id="photoViewerTag"></span>
+      <p class="photo-viewer-caption" id="photoViewerCaption"></p>
+      <span class="photo-viewer-time" id="photoViewerTime"></span>
+      <span class="photo-viewer-hint">Tap anywhere to go back</span>
+    </div>
+  </div>
+
+  <!-- Stays visible on every screen while a background sound is playing. -->
+  <div class="ambient-pill" id="ambientPill" hidden>
+    <span class="ambient-pill-bars" aria-hidden="true"><i></i><i></i><i></i></span>
+    <span id="ambientPillText">Playing</span>
+    <button type="button" id="ambientPillStop">Stop</button>
+  </div>
+
+  <!-- Live listening: the request, and a constant "microphone is live" notice, on every screen. -->
+  <div class="ambient-pill live-pill" id="livePill" role="alert" hidden>
+    <div id="livePillRows"></div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+</div>
+
+<script src="book.js"></script>
+<script src="app.js"></script>
+<script>
+(function(){
+  // Dashboard Design Studio loader — these two files are fetched ONLY in
+  // design mode, so the editor's own code never ships to a real visitor.
+  if(document.documentElement.hasAttribute("data-design-studio")){
+    var link = document.createElement("link");
+    link.rel = "stylesheet"; link.href = "design-studio.css";
+    document.head.appendChild(link);
+    var script = document.createElement("script");
+    script.src = "design-studio.js";
+    document.body.appendChild(script);
+  }
+})();
+</script>
+</body>
+</html>

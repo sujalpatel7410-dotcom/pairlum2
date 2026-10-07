@@ -1,0 +1,211 @@
+/* ==========================================================================
+   PAIRLUM — Dashboard Design Studio (dev-only, ?design=1)
+   This stylesheet is only ever loaded when design mode is active. It styles
+   the studio's own chrome (drawer, tabs, forms, preview frame) and never
+   redefines a dashboard component class — those stay in styles.css so the
+   same rules draw both the real dashboard and the studio's live previews.
+   ========================================================================== */
+
+[data-design-studio] #app{display:none}
+
+#dsRoot{
+  position:fixed;inset:0;z-index:500;
+  display:flex;flex-direction:column;
+  background:var(--paper-dim);
+  font-family:var(--sans);color:var(--ink);
+}
+
+/* ---------------------------------------------------------------- toolbar */
+.ds-toolbar{
+  flex:0 0 auto;display:flex;align-items:center;gap:14px;
+  padding:10px 18px;background:var(--paper);border-bottom:1px solid var(--line);
+  flex-wrap:wrap;
+}
+.ds-toolbar-title{font-family:var(--serif);font-size:1.05rem;font-weight:500;white-space:nowrap}
+.ds-toolbar-title b{font-weight:600;color:var(--wine-text)}
+.ds-tag{
+  font-family:var(--mono);font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--ink-faint);border:1px solid var(--line);border-radius:999px;padding:3px 9px;
+}
+.ds-spacer{flex:1 1 auto}
+.ds-seg{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+.ds-seg button{
+  border:none;background:none;padding:7px 14px;font-size:.78rem;color:var(--ink-soft);
+  cursor:pointer;font-family:var(--sans);
+}
+.ds-seg button.is-active{background:var(--wine);color:#fff}
+.ds-btn{
+  border:1px solid var(--line);background:var(--white);border-radius:999px;
+  padding:7px 16px;font-size:.78rem;color:var(--ink-soft);cursor:pointer;font-family:var(--sans);
+  display:inline-flex;align-items:center;gap:6px;
+}
+.ds-btn:hover{border-color:var(--ink-soft)}
+.ds-btn:disabled{opacity:.4;cursor:not-allowed}
+.ds-btn.ds-btn-primary{background:var(--wine);color:#fff;border-color:var(--wine)}
+.ds-btn.ds-btn-primary:hover{background:var(--wine-deep);border-color:var(--wine-deep)}
+.ds-status{font-size:.72rem;color:var(--ink-faint);white-space:nowrap}
+
+/* ------------------------------------------------------------------ body */
+.ds-body{flex:1 1 auto;display:flex;min-height:0}
+.ds-frame-col{
+  flex:1 1 auto;display:flex;flex-direction:column;align-items:center;
+  padding:22px;overflow:auto;background:repeating-linear-gradient(45deg,var(--paper-dim) 0 10px,var(--paper-deep) 10px 20px);
+}
+.ds-frame-shell{
+  background:var(--ink);border-radius:16px;padding:10px;box-shadow:var(--shadow-3);
+  transition:width var(--dur-med) var(--ease);
+  max-width:100%;
+}
+.ds-frame-shell iframe{
+  display:block;border:none;border-radius:8px;background:var(--paper);height:760px;
+  width:390px;
+}
+.ds-frame-shell.is-desktop iframe{width:1180px}
+.ds-frame-caption{margin-top:10px;font-size:.72rem;color:var(--ink-faint);text-align:center}
+
+.ds-panel{
+  flex:0 0 420px;max-width:420px;border-left:1px solid var(--line);background:var(--paper);
+  overflow-y:auto;padding:18px 18px 60px;
+}
+.ds-panel h2{font-family:var(--serif);font-size:1.3rem;margin:0 0 4px}
+.ds-panel .ds-lede{font-size:.82rem;color:var(--ink-faint);margin:0 0 18px;line-height:1.5}
+
+/* -------------------------------------------------------- kind accordion */
+.ds-kind{border:1px solid var(--line);border-radius:var(--radius-m);margin-bottom:14px;overflow:hidden;background:var(--white)}
+.ds-kind-head{
+  display:flex;align-items:center;gap:10px;width:100%;border:none;background:none;
+  padding:13px 14px;cursor:pointer;font-family:var(--sans);text-align:left;
+}
+.ds-kind-head .name{font-weight:600;font-size:.92rem;flex:1 1 auto}
+.ds-kind-head .chev{transition:transform var(--dur-fast) var(--ease);color:var(--ink-faint)}
+.ds-kind.is-open .ds-kind-head .chev{transform:rotate(90deg)}
+.ds-kind-body{display:none;padding:0 14px 16px}
+.ds-kind.is-open .ds-kind-body{display:block}
+
+/* state preview strip */
+.ds-states{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+.ds-state{
+  border:1px solid var(--line-soft);border-radius:var(--radius-s);padding:10px 6px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+  background:var(--paper-dim);min-height:72px;
+}
+.ds-state .ds-state-label{font-size:.62rem;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-faint)}
+
+/* controls grid */
+.ds-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
+.ds-field{display:flex;flex-direction:column;gap:4px}
+.ds-field.ds-field-wide{grid-column:1 / -1}
+.ds-field label{font-size:.72rem;color:var(--ink-faint)}
+.ds-field .ds-row{display:flex;align-items:center;gap:8px}
+.ds-field input[type="number"], .ds-field select{
+  width:100%;border:1px solid var(--line);border-radius:8px;padding:7px 8px;
+  font-size:.84rem;color:var(--ink);background:var(--white);font-family:var(--sans);
+}
+.ds-field input[type="color"]{
+  width:36px;height:30px;border:1px solid var(--line);border-radius:8px;padding:2px;background:var(--white);cursor:pointer;
+}
+.ds-field .unit{font-size:.72rem;color:var(--ink-faint)}
+.ds-field-touched label{color:var(--wine-text)}
+.ds-field-touched label::after{content:" •";color:var(--wine)}
+
+/* ------------------------------------------------------------- footer    */
+.ds-footer-note{
+  margin-top:10px;font-size:.74rem;line-height:1.5;color:var(--ink-faint);
+  border-top:1px solid var(--line-soft);padding-top:12px;
+}
+.ds-export-box{
+  margin-top:10px;width:100%;min-height:90px;font-family:var(--mono);font-size:.72rem;
+  border:1px solid var(--line);border-radius:8px;padding:10px;color:var(--ink-soft);
+  background:var(--paper-dim);resize:vertical;
+}
+
+@media(max-width:959px){
+  .ds-body{flex-direction:column}
+  .ds-panel{flex:1 1 auto;max-width:none;border-left:none;border-top:1px solid var(--line)}
+  .ds-frame-shell iframe{height:560px}
+}
+
+/* ==========================================================================
+   Elements tab — screen/layers column, canvas zoom, property inspector
+   ========================================================================== */
+.ds-tabs{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+.ds-tabs button{border:none;background:none;padding:7px 15px;font-size:.78rem;color:var(--ink-soft);cursor:pointer;font-family:var(--sans)}
+.ds-tabs button.is-active{background:var(--ink);color:#fff}
+
+.ds-left{
+  flex:0 0 260px;max-width:260px;border-right:1px solid var(--line);background:var(--paper);
+  overflow-y:auto;padding:14px 12px 40px;display:flex;flex-direction:column;gap:16px;
+}
+.ds-left h3{font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);margin:0 0 8px}
+.ds-screen-group{display:flex;flex-direction:column;gap:3px}
+.ds-screen-btn{
+  border:none;background:none;text-align:left;padding:8px 10px;border-radius:8px;
+  font-size:.84rem;color:var(--ink-soft);cursor:pointer;font-family:var(--sans);
+  display:flex;align-items:center;gap:8px;
+}
+.ds-screen-btn:hover{background:var(--paper-dim)}
+.ds-screen-btn.is-active{background:var(--wine);color:#fff}
+.ds-screen-btn .tag{font-size:.6rem;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-faint);margin-left:auto}
+.ds-screen-btn.is-active .tag{color:rgba(255,255,255,.7)}
+
+.ds-layers-search{
+  width:100%;border:1px solid var(--line);border-radius:8px;padding:6px 9px;
+  font-size:.78rem;margin-bottom:8px;background:var(--white);color:var(--ink);font-family:var(--sans);
+}
+.ds-layers-tree{font-size:.8rem}
+.ds-layer-row{
+  display:flex;align-items:center;gap:4px;border-radius:6px;cursor:pointer;
+  padding:4px 6px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.ds-layer-row:hover{background:var(--paper-dim)}
+.ds-layer-row.is-selected{background:var(--wine);color:#fff}
+.ds-layer-row .twirl{width:12px;flex:0 0 auto;color:var(--ink-faint);font-size:.68rem}
+.ds-layer-row.is-selected .twirl{color:rgba(255,255,255,.7)}
+.ds-layer-row .tagname{font-family:var(--mono);font-size:.68rem;color:var(--wine-text);flex:0 0 auto}
+.ds-layer-row.is-selected .tagname{color:#ffd9e2}
+.ds-layer-row .lbl{overflow:hidden;text-overflow:ellipsis}
+.ds-layer-row.is-hidden-el{opacity:.5}
+.ds-layer-children{margin-left:14px}
+
+/* canvas zoom */
+.ds-zoom-row{display:flex;align-items:center;gap:8px}
+.ds-zoom-row input[type="range"]{width:90px}
+.ds-zoom-val{font-size:.72rem;color:var(--ink-faint);width:38px;text-align:right}
+
+/* properties panel (Elements tab) */
+.ds-empty-note{font-size:.82rem;color:var(--ink-faint);line-height:1.6;padding:10px 2px}
+.ds-sel-breadcrumb{
+  font-family:var(--mono);font-size:.68rem;color:var(--ink-faint);background:var(--paper-dim);
+  border-radius:6px;padding:6px 9px;margin-bottom:12px;word-break:break-all;
+}
+.ds-bp-row{display:flex;gap:6px;margin-bottom:14px}
+.ds-bp-row button{
+  flex:1 1 auto;border:1px solid var(--line);background:var(--white);border-radius:8px;
+  padding:7px 0;font-size:.76rem;color:var(--ink-soft);cursor:pointer;font-family:var(--sans);
+}
+.ds-bp-row button.is-active{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+.ds-prop-section{border-top:1px solid var(--line-soft);padding-top:12px;margin-top:12px}
+.ds-prop-section:first-of-type{border-top:none;margin-top:0;padding-top:0}
+.ds-prop-section h4{font-size:.68rem;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-faint);margin:0 0 10px}
+.ds-text-edit{
+  width:100%;min-height:60px;border:1px solid var(--line);border-radius:8px;padding:8px;
+  font-size:.86rem;font-family:var(--sans);color:var(--ink);background:var(--white);resize:vertical;
+}
+.ds-side-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ds-side-grid .ds-field label{font-size:.66rem}
+.ds-row-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.ds-row-actions .ds-btn{padding:6px 11px;font-size:.74rem}
+.ds-row-actions .ds-btn.is-on{background:var(--wine);color:#fff;border-color:var(--wine)}
+
+.ds-asset-drop{
+  border:1.5px dashed var(--line);border-radius:8px;padding:12px;text-align:center;
+  font-size:.76rem;color:var(--ink-faint);cursor:pointer;
+}
+.ds-asset-drop:hover{border-color:var(--ink-soft)}
+
+@media(max-width:1180px){
+  .ds-left{flex:0 0 210px;max-width:210px}
+  .ds-panel{flex:0 0 360px;max-width:360px}
+}
+

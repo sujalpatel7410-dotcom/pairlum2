@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log in or start your First Chapter — Pairlum</title>
+<meta name="description" content="Log in to your Pairlum space, or start your First Chapter.">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600&family=Jost:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="pairlum-core.css">
+<link rel="stylesheet" href="pairlum-pages.css">
+<script src="pairlum-config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="pairlum-core.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="pg-hdr">
+  <a class="pl-wordmark" href="index.html">Pairlum</a>
+  <a class="back" href="index.html">← Back</a>
+</header>
+
+<main class="pg-main" id="main" tabindex="-1" style="max-width:520px">
+  <div class="auth-card">
+    <div class="auth-tabs" role="tablist" aria-label="Log in or sign up">
+      <button type="button" role="tab" id="tabLogin" aria-selected="true">Log in</button>
+      <button type="button" role="tab" id="tabSignup" aria-selected="false">Start your First Chapter</button>
+    </div>
+
+    <div class="auth-error" id="authError" role="alert"></div>
+    <div class="auth-ok" id="authOk" role="status"></div>
+
+    <form id="authForm" novalidate>
+      <div class="field">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" autocomplete="email" required>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" minlength="8" required>
+      </div>
+      <button class="btn" type="submit" id="authSubmit" style="width:100%">Log in</button>
+    </form>
+
+    <p class="auth-note" id="authNote"></p>
+  </div>
+</main>
+
+<footer class="foot"><div class="pl-foot"><span class="pl-wordmark" style="font-size:.9rem">Pairlum</span><span class="sp"></span>
+  <a href="legal.html#privacy">Privacy</a><a href="legal.html#terms">Terms</a><a href="pricing.html">Membership</a><a href="mailto:pairlum.co@gmail.com">Contact</a></div></footer>
+
+<script>
+(function(){
+'use strict';
+var $=function(s,r){return (r||document).querySelector(s)};
+var mode = location.hash === '#signup' ? 'signup' : 'login';
+var tabLogin=$('#tabLogin'),tabSignup=$('#tabSignup'),form=$('#authForm'),submitBtn=$('#authSubmit'),pw=$('#password'),note=$('#authNote'),err=$('#authError'),ok=$('#authOk');
+
+var cfg = window.PAIRLUM_CONFIG || {};
+var hasSupabase = !!(cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase);
+var client = hasSupabase ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey) : null;
+
+function setMode(m){
+  mode = m;
+  var signup = mode === 'signup';
+  tabLogin.setAttribute('aria-selected', String(!signup));
+  tabSignup.setAttribute('aria-selected', String(signup));
+  submitBtn.textContent = signup ? 'Start your First Chapter' : 'Log in';
+  pw.setAttribute('autocomplete', signup ? 'new-password' : 'current-password');
+  location.hash = signup ? 'signup' : 'login';
+  showError(''); showOk('');
+  note.textContent = hasSupabase
+    ? (signup ? 'Takes a minute. No card required.' : "Don't have a space yet? Switch to Start your First Chapter.")
+    : 'Demo mode: no account system is connected yet (see pairlum-config.js). This creates a local, device-only session so you can preview the dashboard.';
+}
+function showError(msg){ err.textContent = msg||''; err.classList.toggle('on', !!msg); }
+function showOk(msg){ ok.textContent = msg||''; ok.classList.toggle('on', !!msg); }
+
+tabLogin.addEventListener('click', function(){ setMode('login'); });
+tabSignup.addEventListener('click', function(){ setMode('signup'); });
+setMode(mode);
+
+form.addEventListener('submit', function(e){
+  e.preventDefault();
+  showError(''); showOk('');
+  var email = $('#email').value.trim(), password = pw.value;
+  if(!email || !/^\S+@\S+\.\S+$/.test(email)){ showError('Enter a valid email address.'); return; }
+  if(password.length < 8){ showError('Password must be at least 8 characters.'); return; }
+
+  submitBtn.disabled = true;
+
+  function goHome(){ setTimeout(function(){ location.href = PL.home(); }, 500); }
+
+  if(hasSupabase){
+    var call = mode === 'signup' ? client.auth.signUp({ email: email, password: password }) : client.auth.signInWithPassword({ email: email, password: password });
+    call.then(function(res){
+      submitBtn.disabled = false;
+      if(res.error){ showError(res.error.message); return; }
+      PL.auth.setSession({ email: email, at: Date.now() });
+      showOk(mode === 'signup' ? 'Your space is ready. Taking you in…' : 'Welcome back. Taking you in…');
+      goHome();
+    }, function(){
+      submitBtn.disabled = false;
+      showError('Something went wrong reaching the server. Please try again.');
+    });
+  }else{
+    // No backend configured yet: a local, device-only demo session.
+    PL.auth.setSession({ email: email, at: Date.now(), demo: true });
+    showOk(mode === 'signup' ? 'First Chapter started (demo). Taking you in…' : 'Signed in (demo). Taking you in…');
+    goHome();
+  }
+});
+})();
+</script>
+</body>
+</html>
