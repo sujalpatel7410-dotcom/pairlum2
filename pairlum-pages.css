@@ -6,7 +6,21 @@
   --ink:#241019;--muted:color-mix(in srgb,#241019 72%,transparent);--line:color-mix(in srgb,#241019 14%,transparent);
   --gut:clamp(20px,5vw,56px);
 }
-html{background:var(--ivory)}
+html{background:var(--ivory);position:relative}
+/* Soft atmosphere + grain — the same two touches that give the landing
+   page its warmth, brought over here too. Static (no JS, no scroll-tied
+   work), so it costs nothing and can't jank: two blurred radial glows that
+   drift extremely slowly, plus the landing page's own grain technique. */
+html::before{
+  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(38vmax 38vmax at 8% -6%,color-mix(in srgb,var(--wine) 16%,transparent),transparent 68%),
+    radial-gradient(34vmax 34vmax at 96% 104%,color-mix(in srgb,var(--gold) 14%,transparent),transparent 70%);
+  animation:pl-atmos-drift 36s ease-in-out infinite alternate;
+}
+@keyframes pl-atmos-drift{from{transform:translate(0,0) scale(1)}to{transform:translate(-2vmax,2vmax) scale(1.04)}}
+body::after{content:"";position:fixed;inset:0;z-index:250;pointer-events:none;opacity:.06;mix-blend-mode:multiply;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='.6'/></svg>")}
+@media(prefers-reduced-motion:reduce){html::before{animation:none}}
 body{background:var(--ivory);color:var(--ink);font:400 1.05rem/1.6 var(--font-ui);min-height:100vh;display:flex;flex-direction:column}
 .pg-hdr{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px var(--gut)}
 .pg-hdr .pl-wordmark{font-size:1.1rem;text-decoration:none}
@@ -26,7 +40,13 @@ body{background:var(--ivory);color:var(--ink);font:400 1.05rem/1.6 var(--font-ui
 .textlink{color:inherit;text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--ink) 35%,transparent)}
 
 /* auth tabs + form */
-.auth-card{max-width:440px;margin:0 auto;padding:36px;border-radius:28px;background:var(--cream);box-shadow:0 24px 50px rgba(42,15,28,.14)}
+.auth-card{
+  max-width:440px;margin:0 auto;padding:36px;border-radius:28px;background:var(--cream);
+  box-shadow:0 1px 0 color-mix(in srgb,var(--gold) 45%,transparent) inset,0 30px 60px -18px rgba(42,15,28,.28),0 10px 26px -10px rgba(42,15,28,.16);
+  animation:pl-card-in .7s cubic-bezier(.22,1,.36,1) both;
+}
+@keyframes pl-card-in{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.auth-card{animation:none}}
 .auth-tabs{display:flex;gap:4px;padding:4px;border-radius:999px;background:color-mix(in srgb,var(--ink) 8%,transparent);margin-bottom:26px}
 .auth-tabs button{flex:1;min-height:40px;border:0;border-radius:999px;background:transparent;font:500 .9rem var(--font-ui);color:var(--ink);cursor:pointer}
 .auth-tabs button[aria-selected=true]{background:var(--ink);color:var(--cream)}
@@ -34,6 +54,15 @@ body{background:var(--ivory);color:var(--ink);font:400 1.05rem/1.6 var(--font-ui
 .field label{font:500 .85rem var(--font-ui);color:var(--muted)}
 .field input{min-height:48px;padding:0 14px;border-radius:12px;border:1.5px solid var(--line);background:#fff;font:400 1rem var(--font-ui);color:var(--ink)}
 .field input:focus-visible{outline:3px solid var(--wine);outline-offset:1px}
+.btn-google{display:flex;align-items:center;justify-content:center;gap:10px;min-height:48px;padding:0 20px;border:1.5px solid var(--line);border-radius:12px;background:#fff;color:#1f1f1f;font:500 .95rem var(--font-ui);cursor:pointer;transition:background .2s,box-shadow .2s}
+.btn-google:hover{background:#f7f7f7;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.btn-google[disabled]{opacity:.55;cursor:default}
+.btn-google--primary{min-height:54px;font-size:1.02rem;border-width:2px;box-shadow:0 10px 24px -12px rgba(0,0,0,.2)}
+.auth-hint{margin:10px 0 0;text-align:center;font-size:.82rem;color:var(--muted)}
+.textlink-center{display:block;width:100%;background:none;border:0;padding:4px;margin:0 auto;color:var(--muted);font:500 .9rem var(--font-ui);text-decoration:underline;text-decoration-color:var(--line);cursor:pointer}
+.textlink-center:hover{color:var(--ink)}
+.auth-divider{display:flex;align-items:center;gap:12px;margin:18px 0;color:var(--muted);font-size:.82rem}
+.auth-divider::before,.auth-divider::after{content:"";flex:1 1 auto;height:1px;background:var(--line)}
 .auth-note{margin:16px 0 0;font-size:.85rem;color:var(--muted);line-height:1.5}
 .auth-error{display:none;margin:0 0 16px;padding:10px 14px;border-radius:10px;background:color-mix(in srgb,var(--wine) 12%,transparent);color:var(--deepwine);font-size:.88rem}
 .auth-error.on{display:block}

@@ -1762,7 +1762,7 @@ ul{margin:0;padding:0;list-style:none}
    Couple refinements — Today feels, hearts on moments, Our someday list.
    Uses only the existing theme variables, so all five moods stay in step.
    ========================================================================== */
-.feel{margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.14);text-align:center}
+.feel{margin-top:14px;padding-top:14px;text-align:center}
 .feel-label{font-family:var(--font-ui);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.66)}
 .feel-chips{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:10px}
 .feel-chip{
@@ -2078,7 +2078,7 @@ body.reduced-motion .live-pill-row .live-dot{animation:none}
 .plan-empty{border:1px dashed var(--line);border-radius:var(--radius-m);padding:16px;font-family:var(--font-ui);font-size:.86rem;color:var(--ink-soft)}
 .plan-ideas{display:flex;flex-wrap:wrap;gap:8px}
 .plan-preview{color:var(--wine-text);min-height:1.2em}
-.sleep-row{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.14)}
+.sleep-row{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:12px;padding-top:12px}
 .sleep-line{font-family:var(--font-ui);font-size:.82rem;line-height:1.4;color:rgba(255,255,255,.82);text-align:center}
 .sleep-line:empty{display:none}
 .presence-avatar.is-asleep{opacity:.5;outline:2px dashed rgba(255,255,255,.5);outline-offset:3px}
@@ -2126,7 +2126,7 @@ body.reduced-motion .petals,body.reduced-motion .petal-burst{display:none}
 
 .little-line{
   display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 12px;
-  margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.14);
+  margin-bottom:12px;padding-bottom:10px;
 }
 .little-greet{font-family:var(--font-display);font-size:1.02rem;color:#fff}
 .little-days{font-family:var(--mono);font-size:.66rem;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.7)}
@@ -2616,6 +2616,12 @@ select.confirm-input{appearance:auto}
 .inbox-go{flex:0 0 auto;color:var(--ink-faint);margin-top:2px}
 .inbox-item:hover .inbox-go{color:var(--wine-text)}
 .inbox-actions .btn-ghost{padding:10px 16px;font-size:.84rem}
+/* A pairing request needs two actions, unlike the single-button .inbox-item
+   rows above — same row shape, its own markup. */
+.inbox-request{width:100%;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line);padding:14px 2px}
+.inbox-list li:last-child .inbox-request{border-bottom:none}
+.inbox-request-actions{flex:0 0 auto;display:flex;gap:8px}
+.inbox-request-actions .btn-ghost,.inbox-request-actions .btn-primary{min-height:36px;padding:0 14px;font-size:.84rem}
 
 /* ---- customize ----------------------------------------------------------- */
 .mood-strip{display:flex;flex-wrap:wrap;gap:8px}

@@ -1,118 +1,344 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Log in or start your First Chapter — Pairlum</title>
-<meta name="description" content="Log in to your Pairlum space, or start your First Chapter.">
-<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
-<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600&family=Jost:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="pairlum-core.css">
-<link rel="stylesheet" href="pairlum-pages.css">
-<script src="pairlum-config.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="pairlum-core.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://accounts.google.com https://apis.google.com;
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+    font-src 'self' https://fonts.gstatic.com;
+    img-src 'self' blob: data: https:;
+    media-src 'self' blob:;
+    connect-src 'self' https://*.supabase.co wss://*.supabase.co https://accounts.google.com;
+    frame-src https://accounts.google.com;
+    object-src 'none';
+    base-uri 'self';
+  ">
+  <title>Log in or start your First Chapter — Pairlum</title>
+  <meta name="description" content="Log in to your Pairlum space, or start your First Chapter.">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2A0F1C">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Pairlum">
+  <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(function () { });</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600&family=Jost:wght@400;500;600&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="pairlum-core.css">
+  <link rel="stylesheet" href="pairlum-pages.css">
+  <script src="pairlum-config.js?v=2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="pairlum-core.js"></script>
 </head>
+
 <body>
-<a class="skip" href="#main">Skip to content</a>
-<header class="pg-hdr">
-  <a class="pl-wordmark" href="index.html">Pairlum</a>
-  <a class="back" href="index.html">← Back</a>
-</header>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="pg-hdr">
+    <a class="pl-wordmark" href="index.html">Pairlum</a>
+    <a class="back" href="index.html">← Back</a>
+  </header>
 
-<main class="pg-main" id="main" tabindex="-1" style="max-width:520px">
-  <div class="auth-card">
-    <div class="auth-tabs" role="tablist" aria-label="Log in or sign up">
-      <button type="button" role="tab" id="tabLogin" aria-selected="true">Log in</button>
-      <button type="button" role="tab" id="tabSignup" aria-selected="false">Start your First Chapter</button>
+  <main class="pg-main" id="main" tabindex="-1" style="max-width:520px">
+    <div class="auth-card">
+      <div class="auth-error" id="authError" role="alert"></div>
+      <div class="auth-ok" id="authOk" role="status"></div>
+
+      <div id="alreadyInPanel" hidden>
+        <p class="pg-lead" style="margin:0 0 18px" id="alreadyInText"></p>
+        <button class="btn" type="button" id="continueBtn" style="width:100%">Continue to Pairlum →</button>
+        <button class="textlink-center" type="button" id="switchAccountBtn" style="margin-top:14px">Not you? Log out and
+          use a different account</button>
+      </div>
+
+      <div id="signInOptions">
+        <button class="btn-google btn-google--primary" type="button" id="googleBtn" style="width:100%">
+          <svg width="20" height="20" viewBox="0 0 18 18" aria-hidden="true">
+            <path fill="#4285F4"
+              d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.13-.85 2.08-1.81 2.72v2.26h2.92c1.71-1.57 2.69-3.88 2.69-6.62z" />
+            <path fill="#34A853"
+              d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.81.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.71H.96v2.33C2.44 15.98 5.48 18 9 18z" />
+            <path fill="#FBBC05"
+              d="M3.97 10.71A5.4 5.4 0 0 1 3.68 9c0-.59.1-1.17.29-1.71V4.96H.96A8.98 8.98 0 0 0 0 9c0 1.45.35 2.83.96 4.04l3.01-2.33z" />
+            <path fill="#EA4335"
+              d="M9 3.58c1.32 0 2.51.46 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.96l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z" />
+          </svg>
+          <span>Continue with Google</span>
+        </button>
+        <p class="auth-hint">The fastest way in — one tap, no password to remember.</p>
+
+        <div class="auth-divider"><span>or</span></div>
+        <button class="textlink-center" type="button" id="toggleEmailBtn">Continue with email instead</button>
+
+        <div id="emailSection" hidden>
+          <div class="auth-tabs" role="tablist" aria-label="Log in or sign up" style="margin-top:18px">
+            <button type="button" role="tab" id="tabLogin" aria-selected="true">Log in</button>
+            <button type="button" role="tab" id="tabSignup" aria-selected="false">Start your First Chapter</button>
+          </div>
+
+          <form id="authForm" novalidate>
+            <div class="field">
+              <label for="email">Email</label>
+              <input type="email" id="email" name="email" autocomplete="email" required>
+            </div>
+            <div class="field">
+              <label for="password">Password</label>
+              <input type="password" id="password" name="password" autocomplete="current-password" minlength="8"
+                required>
+            </div>
+            <button class="btn" type="submit" id="authSubmit" style="width:100%">Log in</button>
+          </form>
+
+          <button class="textlink-center" type="button" id="forgotPasswordBtn" style="margin-top:14px">Forgot your
+            password?</button>
+          <p class="auth-note" id="authNote"></p>
+        </div>
+      </div>
+
+      <div id="resetRequestPanel" hidden>
+        <p class="pg-lead" style="margin:0 0 18px">Enter your email and we'll send you a link to reset your password.
+        </p>
+        <div class="field">
+          <label for="resetEmail">Email</label>
+          <input type="email" id="resetEmail" autocomplete="email" required>
+        </div>
+        <button class="btn" type="button" id="resetSendBtn" style="width:100%">Send reset link</button>
+        <button class="textlink-center" type="button" id="resetBackBtn" style="margin-top:14px">Back to log in</button>
+      </div>
+
+      <div id="setNewPasswordPanel" hidden>
+        <p class="pg-lead" style="margin:0 0 18px">Choose a new password.</p>
+        <div class="field">
+          <label for="newPassword">New password</label>
+          <input type="password" id="newPassword" autocomplete="new-password" minlength="8" required>
+        </div>
+        <button class="btn" type="button" id="setNewPasswordBtn" style="width:100%">Save new password</button>
+      </div>
     </div>
+  </main>
 
-    <div class="auth-error" id="authError" role="alert"></div>
-    <div class="auth-ok" id="authOk" role="status"></div>
+  <footer class="foot">
+    <div class="pl-foot"><span class="pl-wordmark" style="font-size:.9rem">Pairlum</span><span class="sp"></span>
+      <a href="legal.html#privacy">Privacy</a><a href="legal.html#terms">Terms</a><a
+        href="pricing.html">Membership</a><a href="mailto:pairlum.co@gmail.com">Contact</a>
+    </div>
+  </footer>
 
-    <form id="authForm" novalidate>
-      <div class="field">
-        <label for="email">Email</label>
-        <input type="email" id="email" name="email" autocomplete="email" required>
-      </div>
-      <div class="field">
-        <label for="password">Password</label>
-        <input type="password" id="password" name="password" autocomplete="current-password" minlength="8" required>
-      </div>
-      <button class="btn" type="submit" id="authSubmit" style="width:100%">Log in</button>
-    </form>
+  <script>
+    (function () {
+      'use strict';
+      var $ = function (s, r) { return (r || document).querySelector(s) };
+      var mode = location.hash === '#signup' ? 'signup' : 'login';
+      var tabLogin = $('#tabLogin'), tabSignup = $('#tabSignup'), form = $('#authForm'), submitBtn = $('#authSubmit'), pw = $('#password'), note = $('#authNote'), err = $('#authError'), ok = $('#authOk');
 
-    <p class="auth-note" id="authNote"></p>
-  </div>
-</main>
+      var cfg = window.PAIRLUM_CONFIG || {};
+      var hasSupabase = !!(cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase);
+      var client = hasSupabase ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+      }) : null;
 
-<footer class="foot"><div class="pl-foot"><span class="pl-wordmark" style="font-size:.9rem">Pairlum</span><span class="sp"></span>
-  <a href="legal.html#privacy">Privacy</a><a href="legal.html#terms">Terms</a><a href="pricing.html">Membership</a><a href="mailto:pairlum.co@gmail.com">Contact</a></div></footer>
+      function goHome() { location.href = PL.home(); }
 
-<script>
-(function(){
-'use strict';
-var $=function(s,r){return (r||document).querySelector(s)};
-var mode = location.hash === '#signup' ? 'signup' : 'login';
-var tabLogin=$('#tabLogin'),tabSignup=$('#tabSignup'),form=$('#authForm'),submitBtn=$('#authSubmit'),pw=$('#password'),note=$('#authNote'),err=$('#authError'),ok=$('#authOk');
+      // Either Google just redirected back here with a session in the URL (which
+      // the client above already parsed before this line runs, since
+      // detectSessionInUrl's check happens during client construction), or this
+      // account is simply already signed in from an earlier visit. Either way,
+      // jumping straight to the dashboard with no warning reads as a bug ("I
+      // clicked the login page and it skipped straight to the app") — show who's
+      // signed in and let them choose, instead of silently redirecting.
+      var alreadyInPanel = $('#alreadyInPanel'), signInOptions = $('#signInOptions'), alreadyInText = $('#alreadyInText');
+      var resetRequestPanel = $('#resetRequestPanel'), setNewPasswordPanel = $('#setNewPasswordPanel');
 
-var cfg = window.PAIRLUM_CONFIG || {};
-var hasSupabase = !!(cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase);
-var client = hasSupabase ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey) : null;
+      // A password-reset email link lands back here with type=recovery (in
+      // the hash on older Supabase clients, as a query param on newer ones).
+      // detectSessionInUrl has already turned it into a real session by the
+      // time this script runs — same as the Google OAuth callback below —
+      // but a recovery session must NOT fall into the normal "already
+      // signed in, go straight to the app" path: show the new-password form
+      // instead, before anything else.
+      var isRecovery = /type=recovery/.test(location.hash) || /type=recovery/.test(location.search);
+      if (isRecovery) {
+        signInOptions.hidden = true;
+        alreadyInPanel.hidden = true;
+        setNewPasswordPanel.hidden = false;
+      }
 
-function setMode(m){
-  mode = m;
-  var signup = mode === 'signup';
-  tabLogin.setAttribute('aria-selected', String(!signup));
-  tabSignup.setAttribute('aria-selected', String(signup));
-  submitBtn.textContent = signup ? 'Start your First Chapter' : 'Log in';
-  pw.setAttribute('autocomplete', signup ? 'new-password' : 'current-password');
-  location.hash = signup ? 'signup' : 'login';
-  showError(''); showOk('');
-  note.textContent = hasSupabase
-    ? (signup ? 'Takes a minute. No card required.' : "Don't have a space yet? Switch to Start your First Chapter.")
-    : 'Demo mode: no account system is connected yet (see pairlum-config.js). This creates a local, device-only session so you can preview the dashboard.';
-}
-function showError(msg){ err.textContent = msg||''; err.classList.toggle('on', !!msg); }
-function showOk(msg){ ok.textContent = msg||''; ok.classList.toggle('on', !!msg); }
+      if (hasSupabase) {
+        // Detect a fresh Google OAuth callback: Supabase puts access_token in the
+        // URL hash. If we see it, the user just came back from Google — skip the
+        // "already signed in" panel and go straight to the dashboard.
+        var isOAuthCallback = /[#&]access_token=/.test(location.hash);
 
-tabLogin.addEventListener('click', function(){ setMode('login'); });
-tabSignup.addEventListener('click', function(){ setMode('signup'); });
-setMode(mode);
+        client.auth.getSession().then(function (res) {
+          var session = res.data && res.data.session;
+          if (!session) return;
+          if (isRecovery) return; // stay on the new-password form; setNewPasswordBtn below handles the rest
+          PL.auth.setSession({ email: session.user && session.user.email, at: Date.now() });
+          // Whether it's a fresh OAuth callback or a returning visitor already
+          // signed in — just go straight to the app, no extra click needed.
+          goHome();
+        });
+      }
+      var continueBtn = $('#continueBtn');
+      if (continueBtn) continueBtn.addEventListener('click', goHome);
+      var switchAccountBtn = $('#switchAccountBtn');
+      if (switchAccountBtn) switchAccountBtn.addEventListener('click', function () {
+        switchAccountBtn.disabled = true;
+        (hasSupabase ? client.auth.signOut() : Promise.resolve()).then(function () {
+          // A different person is about to sign in on this same browser —
+          // clear everything cached for the account that was just signed
+          // out (the shared space, pairing state, settings, media), not
+          // just the auth session key, so nothing of theirs lingers for
+          // whoever signs in next.
+          try { localStorage.clear(); } catch (e) { }
+          try { indexedDB.deleteDatabase('pairlum-media-v1'); } catch (e) { }
+          alreadyInPanel.hidden = true;
+          signInOptions.hidden = false;
+        });
+      });
 
-form.addEventListener('submit', function(e){
-  e.preventDefault();
-  showError(''); showOk('');
-  var email = $('#email').value.trim(), password = pw.value;
-  if(!email || !/^\S+@\S+\.\S+$/.test(email)){ showError('Enter a valid email address.'); return; }
-  if(password.length < 8){ showError('Password must be at least 8 characters.'); return; }
+      var forgotPasswordBtn = $('#forgotPasswordBtn');
+      var resetEmail = $('#resetEmail'), resetSendBtn = $('#resetSendBtn'), resetBackBtn = $('#resetBackBtn');
+      if (forgotPasswordBtn) forgotPasswordBtn.addEventListener('click', function () {
+        showError(''); showOk('');
+        signInOptions.hidden = true;
+        resetRequestPanel.hidden = false;
+        resetEmail.focus();
+      });
+      if (resetBackBtn) resetBackBtn.addEventListener('click', function () {
+        showError(''); showOk('');
+        resetRequestPanel.hidden = true;
+        signInOptions.hidden = false;
+      });
+      if (resetSendBtn) resetSendBtn.addEventListener('click', function () {
+        showError(''); showOk('');
+        var email = resetEmail.value.trim();
+        if (!email || !/^\S+@\S+\.\S+$/.test(email)) { showError('Enter a valid email address.'); return; }
+        if (!hasSupabase) { showError('Password reset needs a Supabase project connected first (see pairlum-config.js).'); return; }
+        resetSendBtn.disabled = true;
+        var redirectUrl = location.origin + location.pathname;
+        client.auth.resetPasswordForEmail(email, { redirectTo: redirectUrl }).then(function (res) {
+          resetSendBtn.disabled = false;
+          if (res.error) { showError(res.error.message); return; }
+          showOk('Check ' + email + ' for a link to reset your password.');
+        }, function () {
+          resetSendBtn.disabled = false;
+          showError('Something went wrong reaching the server. Please try again.');
+        });
+      });
 
-  submitBtn.disabled = true;
+      var newPassword = $('#newPassword'), setNewPasswordBtn = $('#setNewPasswordBtn');
+      if (setNewPasswordBtn) setNewPasswordBtn.addEventListener('click', function () {
+        showError(''); showOk('');
+        var pwVal = newPassword.value;
+        if (pwVal.length < 8) { showError('Password must be at least 8 characters.'); return; }
+        setNewPasswordBtn.disabled = true;
+        client.auth.updateUser({ password: pwVal }).then(function (res) {
+          setNewPasswordBtn.disabled = false;
+          if (res.error) { showError(res.error.message); return; }
+          PL.auth.setSession({ email: res.data && res.data.user && res.data.user.email, at: Date.now() });
+          showOk('Password updated. Taking you in…');
+          setTimeout(goHome, 500);
+        }, function () {
+          setNewPasswordBtn.disabled = false;
+          showError('Something went wrong reaching the server. Please try again.');
+        });
+      });
 
-  function goHome(){ setTimeout(function(){ location.href = PL.home(); }, 500); }
+      var emailSection = $('#emailSection'), toggleEmailBtn = $('#toggleEmailBtn');
+      toggleEmailBtn.addEventListener('click', function () {
+        emailSection.hidden = !emailSection.hidden;
+        toggleEmailBtn.textContent = emailSection.hidden ? 'Continue with email instead' : 'Hide email sign-in';
+        if (!emailSection.hidden) $('#email').focus();
+      });
 
-  if(hasSupabase){
-    var call = mode === 'signup' ? client.auth.signUp({ email: email, password: password }) : client.auth.signInWithPassword({ email: email, password: password });
-    call.then(function(res){
-      submitBtn.disabled = false;
-      if(res.error){ showError(res.error.message); return; }
-      PL.auth.setSession({ email: email, at: Date.now() });
-      showOk(mode === 'signup' ? 'Your space is ready. Taking you in…' : 'Welcome back. Taking you in…');
-      goHome();
-    }, function(){
-      submitBtn.disabled = false;
-      showError('Something went wrong reaching the server. Please try again.');
-    });
-  }else{
-    // No backend configured yet: a local, device-only demo session.
-    PL.auth.setSession({ email: email, at: Date.now(), demo: true });
-    showOk(mode === 'signup' ? 'First Chapter started (demo). Taking you in…' : 'Signed in (demo). Taking you in…');
-    goHome();
-  }
-});
-})();
-</script>
+      var googleBtn = $('#googleBtn');
+      if (!hasSupabase) {
+        googleBtn.disabled = true;
+        googleBtn.title = "Connect a Supabase project with Google sign-in enabled first (see supabase/SETUP.md).";
+      }
+      googleBtn.addEventListener('click', function () {
+        if (!hasSupabase) { showError('Google sign-in needs a Supabase project connected first (see pairlum-config.js).'); return; }
+        googleBtn.disabled = true;
+        // Build the redirect URL pointing back to this exact page so Supabase can
+        // parse the OAuth tokens from the hash and then we redirect to the dashboard.
+        var redirectUrl = location.origin + location.pathname;
+        // Remove any stale hash so it doesn't confuse Supabase's detectSessionInUrl.
+        if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+        client.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo: redirectUrl }
+        }).then(function (res) {
+          if (res.error) { googleBtn.disabled = false; showError(res.error.message); }
+          // On success the browser is already navigating to Google — nothing else to do here.
+        });
+      });
+
+      function setMode(m) {
+        mode = m;
+        var signup = mode === 'signup';
+        tabLogin.setAttribute('aria-selected', String(!signup));
+        tabSignup.setAttribute('aria-selected', String(signup));
+        submitBtn.textContent = signup ? 'Start your First Chapter' : 'Log in';
+        pw.setAttribute('autocomplete', signup ? 'new-password' : 'current-password');
+        location.hash = signup ? 'signup' : 'login';
+        var forgotBtn = $('#forgotPasswordBtn'); if (forgotBtn) forgotBtn.hidden = signup || !hasSupabase;
+        showError(''); showOk('');
+        note.textContent = hasSupabase
+          ? (signup ? 'Takes a minute. No card required.' : "Don't have a space yet? Switch to Start your First Chapter.")
+          : 'Demo mode: no account system is connected yet (see pairlum-config.js). This creates a local, device-only session so you can preview the dashboard.';
+      }
+      function showError(msg) { err.textContent = msg || ''; err.classList.toggle('on', !!msg); }
+      function showOk(msg) { ok.textContent = msg || ''; ok.classList.toggle('on', !!msg); }
+
+      tabLogin.addEventListener('click', function () { setMode('login'); });
+      tabSignup.addEventListener('click', function () { setMode('signup'); });
+      setMode(mode);
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        showError(''); showOk('');
+        var email = $('#email').value.trim(), password = pw.value;
+        if (!email || !/^\S+@\S+\.\S+$/.test(email)) { showError('Enter a valid email address.'); return; }
+        if (password.length < 8) { showError('Password must be at least 8 characters.'); return; }
+
+        submitBtn.disabled = true;
+
+        if (hasSupabase) {
+          var call = mode === 'signup' ? client.auth.signUp({ email: email, password: password }) : client.auth.signInWithPassword({ email: email, password: password });
+          call.then(function (res) {
+            submitBtn.disabled = false;
+            if (res.error) { showError(res.error.message); return; }
+            if (mode === 'signup' && (!res.data || !res.data.session)) {
+              // Email confirmation is required on this project: there is no
+              // session yet, so going to app.html now would just bounce back
+              // here. Tell them to confirm, then log in instead of redirecting.
+              showOk("Check " + email + " for a confirmation link, then log in.");
+              setMode('login');
+              return;
+            }
+            PL.auth.setSession({ email: email, at: Date.now() });
+            showOk(mode === 'signup' ? 'Your space is ready. Taking you in…' : 'Welcome back. Taking you in…');
+            setTimeout(goHome, 500);
+          }, function () {
+            submitBtn.disabled = false;
+            showError('Something went wrong reaching the server. Please try again.');
+          });
+        } else {
+          // No backend configured yet: a local, device-only demo session.
+          PL.auth.setSession({ email: email, at: Date.now(), demo: true });
+          showOk(mode === 'signup' ? 'First Chapter started (demo). Taking you in…' : 'Signed in (demo). Taking you in…');
+          setTimeout(goHome, 500);
+        }
+      });
+    })();
+  </script>
 </body>
+
 </html>
