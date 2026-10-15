@@ -116,10 +116,14 @@ actual project — the ref is the part of your project URL before
 In `pairlum-config.js`:
 ```js
 understand: {
-  url: "https://ytdzopedclxgwxjapnjc.supabase.co/functions/v1/pairlum-understand",
-  token: "<the same supabaseAnonKey from above>"
+  url: "https://ytdzopedclxgwxjapnjc.supabase.co/functions/v1/pairlum-understand"
 },
 ```
+(`token` is optional now — app.js sends the signed-in user's real session
+token automatically whenever a Supabase backend is connected, which is what
+the function checks against each recording's space membership. `token` is
+only used as a fallback if there's no real session, e.g. while testing
+without `auth.html`.)
 
 **e) Test it**
 In the app: Settings → Privacy → turn on "Write up my recordings" → record a

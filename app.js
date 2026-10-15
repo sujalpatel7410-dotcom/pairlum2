@@ -980,6 +980,46 @@
   /* ------------------------------------------------------------------ */
   function setText(id, text) { var n = document.getElementById(id); if (n) n.textContent = text; }
 
+  /* ---- profile photos: optional, user-set pictures -------------------
+     Stored as ordinary media — same IndexedDB + cloud-sync system as
+     photos/voice notes (idbPutMedia/idbGetMedia), one fixed id per person
+     so re-uploading just overwrites the old one. Only a timestamp
+     (profiles[id].photoAt) lives in the shared JSON record; the bytes
+     never do, same reasoning as every other piece of media in this app. */
+  function avatarPhotoId(personId) { return "avatar:" + personId; }
+  var AVATAR_URLS = {}, AVATAR_LOADING = {};
+  function paintAvatarEl(el, personId) {
+    if (!el) return;
+    var url = AVATAR_URLS[personId];
+    el.style.backgroundImage = url ? "url(" + url + ")" : "";
+    el.style.backgroundSize = url ? "cover" : "";
+    el.style.backgroundPosition = url ? "center" : "";
+    el.style.color = url ? "transparent" : "";
+  }
+  function paintAllAvatars() {
+    var cu = SPACE.currentUser, p = SPACE.partner;
+    paintAvatarEl(document.getElementById("avatarA"), cu.id);
+    paintAvatarEl(document.getElementById("avatarB"), p.id);
+    paintAvatarEl(document.getElementById("presenceAvatarA"), cu.id);
+    paintAvatarEl(document.getElementById("presenceAvatarB"), p.id);
+    paintAvatarEl(document.getElementById("needPrimaryAvatar"), p.id);
+    paintAvatarEl(document.getElementById("profileAvatar"), cu.id);
+    paintAvatarEl(document.querySelector("#needOverlay .need-reveal-avatar"), p.id);
+  }
+  // Loads a person's photo blob once (if they have one) and caches it as an
+  // object URL; a no-op once cached or already in flight.
+  function ensureAvatarPhoto(person) {
+    if (!person.photoAt) { if (AVATAR_URLS[person.id]) { URL.revokeObjectURL(AVATAR_URLS[person.id]); delete AVATAR_URLS[person.id]; } return; }
+    if (AVATAR_URLS[person.id] || AVATAR_LOADING[person.id]) return;
+    AVATAR_LOADING[person.id] = true;
+    idbGetMedia(avatarPhotoId(person.id), function (err, blob) {
+      delete AVATAR_LOADING[person.id];
+      if (err || !blob) return;
+      AVATAR_URLS[person.id] = URL.createObjectURL(blob);
+      paintAllAvatars();
+    });
+  }
+
   function renderSpaceBindings() {
     var cu = SPACE.currentUser, p = SPACE.partner;
 
@@ -995,6 +1035,7 @@
     setText("cityALabel", cu.city);
     setText("cityBLabel", p.city);
     setText("needPrimaryAvatar", p.initial);
+    ensureAvatarPhoto(cu); ensureAvatarPhoto(p); paintAllAvatars();
     setText("thinkingQuickLabel", "Thinking of " + p.name);
     renderComfort();
     setText("needSecondaryLabel", "Need " + p.name + "? Just say so.");
@@ -1280,19 +1321,14 @@
         }
         return;
       }
-      if (!e.target.closest("[data-voice-cta]")) return;
-      if (e.target.closest("[data-open-moment]")) return; // handled for the whole page, below
-      if (!isPaired()) {
-        renderPairingOverlay();
-        openOverlay("pairingOverlay");
-        showToast("Connect with " + SPACE.partner.name + " before adding a moment.");
-        return;
-      }
-      resetCaptureFlow();
-      document.querySelectorAll(".capture-type").forEach(function (b) { b.classList.remove("is-selected"); });
-      document.querySelector('.capture-type[data-type="voice"]').classList.add("is-selected");
-      renderCaptureBody("voice");
-      openOverlay("captureOverlay");
+      // "Reply with your voice" on a grid card's moment-bar is itself a
+      // data-open-moment button (momentBarInner()) — the global handler in
+      // wireMoments() already opens the moment, which has its own working
+      // "Reply with your voice" button (renderMomentReply()). There used to
+      // be a shortcut here straight into the capture overlay for a separate
+      // data-voice-cta element, but no such element has existed for a while
+      // (every moment-bar button uses data-open-moment only) — removed
+      // rather than left as dead, unreachable code.
     });
   }
 
@@ -2033,6 +2069,7 @@
     document.getElementById("needRevealMeta").textContent = p.name + " · " + comfortClock(theirs.secs);
     document.getElementById("needRevealTimestamp").textContent = "Left for you · " + agoLabel(theirs.at);
     var av = document.querySelector("#needOverlay .need-reveal-avatar"); if (av) av.textContent = p.initial;
+    paintAvatarEl(av, p.id);
     buildWaveform(document.getElementById("needWaveform"), 40);
     // a fresh play button each time, wired to the real recording
     var old = document.getElementById("needVoicePlay"), btn = old.cloneNode(true);
@@ -3974,6 +4011,27 @@
       } catch (e) { URL.revokeObjectURL(url); cb(file, false); }
     };
     img.onerror = function () { URL.revokeObjectURL(url); cb(file, false); };
+    img.src = url;
+  }
+  // Crops to a centered square and downsizes to avatar size — a profile
+  // photo never needs to be bigger than it's ever shown, and cropping up
+  // front (instead of relying on CSS cover everywhere it's drawn) means
+  // every avatar element, old and new, just works with no extra styling.
+  function shrinkAvatarPhoto(file, cb) {
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function () {
+      try {
+        var side = Math.min(img.width, img.height);
+        var sx = (img.width - side) / 2, sy = (img.height - side) / 2;
+        var size = Math.min(256, side);
+        var cv = document.createElement("canvas");
+        cv.width = size; cv.height = size;
+        cv.getContext("2d").drawImage(img, sx, sy, side, side, 0, 0, size, size);
+        cv.toBlob(function (blob) { URL.revokeObjectURL(url); cb(blob); }, "image/jpeg", 0.85);
+      } catch (e) { URL.revokeObjectURL(url); cb(null); }
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); cb(null); };
     img.src = url;
   }
 
@@ -7984,7 +8042,20 @@
     return understandCfg() ? "pending" : "waiting";
   }
   var UNDERSTAND_BUSY = {};
-  function serviceHeaders(cfg) { return cfg.token ? { Authorization: "Bearer " + cfg.token } : {}; }
+  // The understanding service checks that the caller is actually a member of
+  // the space a recording/search belongs to, which means it needs the real
+  // signed-in session's token (not PAIRLUM_CONFIG.understand.token, which is
+  // the same static public key for every installation) — see
+  // PairlumBackend.getSession() in pairlum-backend.js. Falls back to
+  // cfg.token when there's no real backend session (e.g. demo mode), same
+  // as before this was added.
+  function serviceHeaders(cfg) {
+    var fallback = cfg.token ? { Authorization: "Bearer " + cfg.token } : {};
+    if (!window.PairlumBackend || !window.PairlumBackend.isConfigured()) return Promise.resolve(fallback);
+    return window.PairlumBackend.getSession().then(function (session) {
+      return (session && session.access_token) ? { Authorization: "Bearer " + session.access_token } : fallback;
+    }, function () { return fallback; });
+  }
   function afterUnderstood() { refreshMomentBars(); if (document.getElementById("momentOverlay").classList.contains("is-open")) renderMomentThread(); }
   function sendToService(rec) {
     var cfg = understandCfg();
@@ -8002,7 +8073,9 @@
         recordingId: rec.recId, spaceId: SPACE.spaceId, speaker: ME, kind: rec.kind, recordedAt: new Date(rec.at || Date.now()).toISOString(),
         timezone: SPACE.currentUser.timezone, names: [SPACE.currentUser.name, SPACE.partner.realName || SPACE.partner.name], relatedCaption: rec.caption || ""
       }));
-      fetch(base + "/v1/recordings", { method: "POST", body: fd, headers: serviceHeaders(cfg) })
+      serviceHeaders(cfg).then(function (headers) {
+        return fetch(base + "/v1/recordings", { method: "POST", body: fd, headers: headers });
+      })
         .then(function (r) { if (r.status === 202) return { status: "pending" }; if (!r.ok) throw new Error("service"); return r.json(); })
         .then(function (data) {
           if (data && data.status === "pending") {
@@ -8018,7 +8091,9 @@
     var waits = (cfg.pollMs && cfg.pollMs.length) ? cfg.pollMs : [2000, 5000, 12000, 30000];
     if (n >= waits.length) return; // still pending: tried again the next time Pairlum opens
     window.setTimeout(function () {
-      fetch(base + "/v1/recordings/" + encodeURIComponent(rec.recId), { headers: serviceHeaders(cfg) })
+      serviceHeaders(cfg).then(function (headers) {
+        return fetch(base + "/v1/recordings/" + encodeURIComponent(rec.recId), { headers: headers });
+      })
         .then(function (r) { if (!r.ok) throw new Error("service"); return r.json(); })
         .then(function (data) {
           if (data && data.status === "ready") { setUnderstood(rec.recId, cleanUnderstood(data, "service")); afterUnderstood(); }
@@ -8040,7 +8115,9 @@
     var cfg = understandCfg();
     if (!cfg) return;
     var base = cfg.url.replace(/\/+$/, "");
-    recIds.forEach(function (id) { try { fetch(base + "/v1/recordings/" + encodeURIComponent(id), { method: "DELETE", headers: serviceHeaders(cfg), keepalive: true }).catch(function () { }); } catch (e) { } });
+    serviceHeaders(cfg).then(function (headers) {
+      recIds.forEach(function (id) { try { fetch(base + "/v1/recordings/" + encodeURIComponent(id), { method: "DELETE", headers: headers, keepalive: true }).catch(function () { }); } catch (e) { } });
+    });
   }
 
   /* ---- how one recording is drawn (in a moment, in the thread) ---- */
@@ -8498,7 +8575,9 @@
     var cfg = understandCfg(), q = document.getElementById("voiceFindInput").value.trim(), seq = ++voiceFind.seq;
     voiceFind.service = {};
     if (!cfg || q.length < 3) return;
-    fetch(cfg.url.replace(/\/+$/, "") + "/v1/search", { method: "POST", headers: copyInto({ "Content-Type": "application/json" }, serviceHeaders(cfg)), body: JSON.stringify({ spaceId: SPACE.spaceId, query: q, limit: 20 }) })
+    serviceHeaders(cfg).then(function (headers) {
+      return fetch(cfg.url.replace(/\/+$/, "") + "/v1/search", { method: "POST", headers: copyInto({ "Content-Type": "application/json" }, headers), body: JSON.stringify({ spaceId: SPACE.spaceId, query: q, limit: 20 }) });
+    })
       .then(function (r) { if (!r.ok) throw new Error("service"); return r.json(); })
       .then(function (data) {
         if (seq !== voiceFind.seq) return; // an older question's answer
@@ -9291,7 +9370,14 @@
       '<form id="profileForm" class="field-stack" novalidate>' +
       '<div class="overlay-section">' +
       '<div class="overlay-section-head"><h4>You</h4></div>' +
-      '<div class="profile-preview"><span class="profile-avatar" id="profileAvatar">' + escapeHtml(me.initial) + '</span><span class="body-s">This letter is your picture across Pairlum. It follows your name.</span></div>' +
+      '<div class="profile-preview">' +
+      '<button type="button" class="profile-avatar" id="profileAvatar" aria-label="' + (me.photoAt ? "Change your photo" : "Add a photo") + '"><span id="profileAvatarLetter">' + escapeHtml(me.initial) + '</span></button>' +
+      '<input type="file" accept="image/*" id="profilePhotoInput" hidden>' +
+      '<span class="profile-avatar-copy">' +
+      '<span class="body-s">Tap the circle to ' + (me.photoAt ? "change" : "add") + ' your photo. It follows your name everywhere in Pairlum.</span>' +
+      (me.photoAt ? '<button type="button" class="ambient-link" id="profilePhotoRemoveBtn">Remove photo</button>' : '') +
+      '</span>' +
+      '</div>' +
       '<label class="field"><span class="field-label">Your name</span><input type="text" id="profileName" class="confirm-input" maxlength="24" autocomplete="given-name" value="' + escapeHtml(me.name) + '"></label>' +
       '<label class="field"><span class="field-label">Your city</span><input type="text" id="profileCity" class="confirm-input" maxlength="40" list="profileCityList" autocomplete="off" value="' + escapeHtml(me.city) + '"></label>' +
       '<datalist id="profileCityList">' + CITIES.map(function (c) { return '<option value="' + escapeHtml(c[0]) + '"></option>'; }).join("") + '</datalist>' +
@@ -9335,9 +9421,46 @@
     paintCity();
     cityInput.addEventListener("input", paintCity);
     document.getElementById("profileName").addEventListener("input", function (e) {
-      setText("profileAvatar", e.target.value.trim().charAt(0).toUpperCase() || "?");
+      setText("profileAvatarLetter", e.target.value.trim().charAt(0).toUpperCase() || "?");
     });
     document.getElementById("profileToCustomize").addEventListener("click", function () { switchOverlay("profileOverlay", "customizeOverlay", renderCustomizeOverlay); });
+
+    // Photo: rebuilt DOM loses any previously-applied inline background, so
+    // repaint it immediately from whatever's already cached.
+    paintAvatarEl(document.getElementById("profileAvatar"), ME);
+    document.getElementById("profileAvatar").addEventListener("click", function () {
+      document.getElementById("profilePhotoInput").click();
+    });
+    document.getElementById("profilePhotoInput").addEventListener("change", function (e) {
+      var file = e.target.files && e.target.files[0];
+      e.target.value = "";
+      if (!file || file.type.indexOf("image/") !== 0) return;
+      shrinkAvatarPhoto(file, function (blob) {
+        if (!blob) { setText("profileError", "Couldn't read that photo. Try a different one."); return; }
+        idbPutMedia(avatarPhotoId(ME), blob, function (err) {
+          if (err) { setText("profileError", "Not saved. Try again."); return; }
+          if (AVATAR_URLS[ME]) URL.revokeObjectURL(AVATAR_URLS[ME]);
+          AVATAR_URLS[ME] = URL.createObjectURL(blob);
+          if (!mutate(function (db) { db.profiles[ME] = db.profiles[ME] || {}; db.profiles[ME].photoAt = Date.now(); }, { evenIfPaused: true })) {
+            setText("profileError", "Not saved. Try again."); return;
+          }
+          refreshEverything();
+          renderProfileOverlay();
+          showToast("Photo updated. " + SPACE.partner.name + " sees it too.");
+        });
+      });
+    });
+    var removePhotoBtn = document.getElementById("profilePhotoRemoveBtn");
+    if (removePhotoBtn) removePhotoBtn.addEventListener("click", function () {
+      idbDeleteMedia(avatarPhotoId(ME), function () { });
+      if (AVATAR_URLS[ME]) { URL.revokeObjectURL(AVATAR_URLS[ME]); delete AVATAR_URLS[ME]; }
+      if (!mutate(function (db) { if (db.profiles[ME]) delete db.profiles[ME].photoAt; }, { evenIfPaused: true })) {
+        setText("profileError", "Not saved. Try again."); return;
+      }
+      refreshEverything();
+      renderProfileOverlay();
+      showToast("Photo removed.");
+    });
     document.getElementById("profileForm").addEventListener("submit", function (e) {
       e.preventDefault();
       var name = document.getElementById("profileName").value.trim();
@@ -9355,13 +9478,17 @@
         lat: c ? c[2] : null, lon: c ? c[3] : null, birthday: birthday || ""
       };
       var tzPick = (document.getElementById("profileSpaceTz") || {}).value;
+      // evenIfPaused: this is YOUR OWN setup (name/city/photo), not live
+      // shared content like Shared Day or I Need You — you should be able
+      // to finish setting yourself up even before a partner has joined, or
+      // after stepping away. See the pairing gate note on applyPairingGate().
       if (!mutate(function (db) {
         db.profiles[ME] = next;
         if (tzPick) db.spaceTz = tzPick;
         if (start !== SPACE.relationshipStart) db.relStart = start;
         db.profileAt = db.profileAt || {};
         db.profileAt[ME] = Date.now();
-      })) return fail("Not saved. What you typed is still here, so you can try again.");
+      }, { evenIfPaused: true })) return fail("Not saved. What you typed is still here, so you can try again.");
       refreshEverything();
       checkSharedDay();
       closeOverlay("profileOverlay");
@@ -10823,7 +10950,7 @@
   /* ------------------------------------------------------------------ */
   var photoViewerFrom = null;
   var PHOTO_CARDS = ".moment-card, .parallel-half, .resurfaced, .history-tile";
-  var PHOTO_SKIP = "button, a, input, select, textarea, label, summary, audio, video, [data-heart-id], [data-voice-cta], [data-retry-moment], [data-open-moment]";
+  var PHOTO_SKIP = "button, a, input, select, textarea, label, summary, audio, video, [data-heart-id], [data-retry-moment], [data-open-moment]";
   function photoUrlOf(card) {
     var layer = card.querySelector(".photo");
     if (!layer || card.querySelector(".moment-video-wrap")) return "";
