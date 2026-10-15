@@ -29,29 +29,16 @@ window.PairlumSync = (function(){
   var LIVE_SIGNAL_KEY = NS + "pairlum-live-signal-v1";
   var HOLD_SIGNAL_KEY = NS + "pairlum-hold-signal-v1";
   var SIGNAL_KEYS = [LIVE_SIGNAL_KEY, HOLD_SIGNAL_KEY];
+  // Set by auth.html when it sees ?invite=CODE in the URL, read (and
+  // cleared) here once a session exists — see boot() and auth.html.
+  var PENDING_INVITE_KEY = NS + "pairlum-pending-invite";
 
   var B = window.PairlumBackend;
   var configured = B && B.isConfigured();
   var rawSetItem = localStorage.setItem.bind(localStorage);
   var rawGetItem = localStorage.getItem.bind(localStorage);
 
-  var state = { spaceId: null, role: null, myId: null, serverRev: 0, applyingRemote: false, sub: null, requestsSub: null, pendingRequestId: null };
-
-  // Cached list of pending requests addressed to ME — kept fresh by boot()'s
-  // initial fetch and by subscribeMyRequests' realtime callback below.
-  // app.js reads this via window.PairlumSpace.incomingRequests() and is told
-  // when it changes via a "pairlum:incoming-requests" window event, the same
-  // "app.js doesn't need to know how this data arrives" principle the
-  // storage-event bridge above already uses.
-  var incomingRequests = [];
-  function setIncomingRequests(list){
-    incomingRequests = list || [];
-    try{ window.dispatchEvent(new CustomEvent("pairlum:incoming-requests", { detail: incomingRequests.slice() })); }catch(e){}
-  }
-  function refreshIncomingRequests(){
-    if(!state.myId) return Promise.resolve();
-    return B.myIncomingRequests(state.myId).then(setIncomingRequests);
-  }
+  var state = { spaceId: null, role: null, myId: null, serverRev: 0, applyingRemote: false, sub: null, inviteCode: null };
 
   function dispatchStorage(key, newValue){
     try{
@@ -114,25 +101,6 @@ window.PairlumSync = (function(){
       if(key === SHARED_KEY) schedulePush();
       else if(SIGNAL_KEYS.indexOf(key) > -1 && state.sub) state.sub.broadcast({ key: key, value: value });
     };
-  }
-
-  // ---- pairing requests: realtime + cache, independent of having a space ----
-  function installRequestsRealtime(){
-    state.requestsSub = B.subscribeMyRequests(state.myId, function(){
-      // A request addressed to me appeared or changed — just refetch; the
-      // list is short and this keeps the cache simple and always correct.
-      refreshIncomingRequests();
-    }, function(payload){
-      // A request I SENT changed status. Acceptance is already covered by
-      // the space_members INSERT listener in installRealtime() below (once
-      // I have a space to subscribe on); here we only need to handle the
-      // other party declining, so the sender isn't stuck on a dead "waiting"
-      // screen.
-      if(payload && payload.new && payload.new.status === "declined" && payload.new.id === state.pendingRequestId){
-        setPairing({ status: "not_started", pendingRequestEmail: null, pendingRequestId: null, inviteCode: null });
-        state.pendingRequestId = null;
-      }
-    });
   }
 
   // ---- inbound: realtime ----
@@ -203,22 +171,36 @@ window.PairlumSync = (function(){
     return local.charAt(0).toUpperCase() + local.slice(1);
   }
 
-  // Internal: makes sure the caller has a space to attach a pairing request
-  // to, creating one (and stamping a real display name in) if needed. Sets
+  // My own local, pre-space profile edits (Settings → Profile, made before
+  // any real space existed to sync them to — they only ever landed in
+  // localStorage until now). Falls back to a name derived from the email
+  // for whatever was never touched, so setting your name first and THEN
+  // creating or accepting an invite doesn't lose it the moment a real space
+  // exists.
+  function localProfileFallback(session){
+    var saved = {};
+    try{ saved = JSON.parse(rawGetItem(SHARED_KEY) || "{}").profiles || {}; }catch(e){}
+    return { aarav: Object.assign({ name: deriveDisplayName(session) }, saved.u_aarav || {}),
+             mira: Object.assign({ name: deriveDisplayName(session) }, saved.u_mira || {}) };
+  }
+
+  // Internal: makes sure the caller has a space to attach an invite to,
+  // creating one (and stamping a real display name in) if needed. Sets
   // state.spaceId/state.role in memory immediately — not only after a reload
-  // — so a FAILED send (e.g. a mistyped email) can be retried without trying
-  // to create a second space.
+  // — so a failed invite creation can be retried without trying to create a
+  // second space.
   function ensureSpace(session){
     if(state.spaceId) return Promise.resolve(state.spaceId);
+    var mine = localProfileFallback(session).aarav;
     return B.createSpace().then(function(space){
       state.spaceId = space.id;
       state.role = "a";
       var data = space.data || {};
       data.profiles = data.profiles || {};
-      data.profiles.u_aarav = { name: deriveDisplayName(session) };
+      data.profiles.u_aarav = mine;
       // Neutral placeholder until the real partner accepts and stamps their
-      // own name in — otherwise the pairing screen would show the leftover
-      // demo name "Mira".
+      // own name in (see PairlumSpace.acceptInviteOffer below) — otherwise
+      // the pairing screen would show the leftover demo name "Mira".
       data.profiles.u_mira = { name: "Your partner" };
       return B.writeSpaceData(space.id, data, space.rev).then(function(){ return space.id; });
     });
@@ -240,33 +222,56 @@ window.PairlumSync = (function(){
     isConfigured: function(){ return configured; },
     hasSpace: function(){ return !!state.spaceId; },
     role: function(){ return state.role; },
-    // Sends a pairing request to `email`, creating this account's space
-    // first if it doesn't have one yet (see ensureSpace above). Reloads on
-    // success so boot() picks up both the (possibly new) membership and the
-    // fresh pending request in one go.
-    sendRequest: function(email){
+    // Creates this account's space first if it doesn't have one yet (see
+    // ensureSpace above), then a shareable invite for it — or re-fetches
+    // the existing pending one, so opening the pairing screen twice doesn't
+    // invalidate a link already sent. No reload needed: the pairing panel
+    // re-renders straight from the returned code.
+    createInvite: function(){
       return B.getSession().then(function(session){
-        return ensureSpace(session).then(function(spaceId){
-          return B.sendPairingRequest(spaceId, email);
-        });
-      }).then(function(req){ location.reload(); return req; });
-    },
-    cancelRequest: function(){
-      return B.cancelPairingRequest(state.pendingRequestId).then(function(){
-        state.pendingRequestId = null;
-        setPairing({ status: "not_started", pendingRequestEmail: null, pendingRequestId: null, inviteCode: null });
+        return ensureSpace(session).then(function(spaceId){ return B.createInvite(spaceId); });
+      }).then(function(inv){
+        state.inviteCode = inv.code;
+        setPairing({ status: "invite_ready", inviteCode: inv.code, inviteSentAt: inv.created_at });
+        return inv;
       });
     },
-    // Accepting/declining an INCOMING request never needs a space of my
-    // own (that's the sender's space) — these stand alone, unlike the rest
-    // of this object which act on state.spaceId.
-    acceptIncomingRequest: function(requestId){
-      return B.acceptPairingRequest(requestId).then(function(){ location.reload(); });
+    revokeInvite: function(){
+      return B.revokeInvite(state.inviteCode).then(function(){
+        state.inviteCode = null;
+        setPairing({ status: "not_started", inviteCode: null, inviteSentAt: null });
+      });
     },
-    declineIncomingRequest: function(requestId){
-      return B.declinePairingRequest(requestId).then(function(){ return refreshIncomingRequests(); });
+    // The OTHER side of pairing: this browser is holding a pending invite
+    // code (from opening a link — see boot() below), not yet redeemed.
+    // These act on that stashed code, not on state.spaceId (this account
+    // doesn't have a space yet — that's the point).
+    // `code` is optional — omit it to redeem the stashed offer from a link
+    // (state.inviteCode); pass one to redeem a code typed directly into the
+    // "Already have an invite code?" fallback field instead.
+    acceptInviteOffer: function(code){
+      return B.getSession().then(function(session){
+        return B.redeemInvite(code || state.inviteCode).then(function(space){
+          // redeem_space_invite only adds the space_members row — it leaves
+          // profiles.u_mira as the inviter's neutral "Your partner" seed, so
+          // stamp a real name in now, the same way ensureSpace does for the
+          // inviter's own side.
+          var mine = localProfileFallback(session).mira;
+          var data = space.data || {};
+          data.profiles = data.profiles || {};
+          data.profiles.u_mira = mine;
+          return B.writeSpaceData(space.id, data, space.rev);
+        });
+      }).then(function(){
+        try{ localStorage.removeItem(PENDING_INVITE_KEY); }catch(e){}
+        location.reload();
+      });
     },
-    incomingRequests: function(){ return incomingRequests.slice(); },
+    declineInviteOffer: function(){
+      try{ localStorage.removeItem(PENDING_INVITE_KEY); }catch(e){}
+      state.inviteCode = null;
+      setPairing({ status: "not_started", inviteCode: null, inviteFromName: null });
+    },
     // Steps away without ending the connection: pauses writes for THIS
     // account only (write_space_data requires the caller to be 'active') —
     // the partner keeps reading and writing normally. setPairing updates
@@ -300,22 +305,36 @@ window.PairlumSync = (function(){
     installOutboundHook();
     return B.getSession().then(function(session){
       if(!session){ location.replace("auth.html#login"); return Promise.reject(new Error("no session")); }
-      // Incoming pairing requests work before this account has ever created
-      // or joined a space, so fetch + subscribe as soon as we know who's
-      // signed in, regardless of what myMembership() turns out to say.
       state.myId = session.user.id;
-      refreshIncomingRequests();
-      installRequestsRealtime();
       return B.myMembership(state.myId);
     }).then(function(membership){
       if(!membership){
         // Signed in, but this account hasn't started or joined a space yet.
-        // Seed a blank, local-only record and the "not_started" pairing
-        // state so app.js renders a real empty shell — the pairing overlay
-        // offers an email field to send a request.
+        // Seed a blank, local-only record so app.js renders a real empty
+        // shell either way.
         writeLocal(SHARED_KEY, JSON.stringify(B.emptySpaceSeed()));
-        setPairing({ status: "not_started", pendingRequestEmail: null, pendingRequestId: null, inviteCode: null, inviteSentAt: null, joinedAt: null });
         try{ sessionStorage.setItem(ME_KEY, "u_aarav"); }catch(e){}
+        // This browser may be holding a pending invite code (opened a link
+        // before or while signing in — see auth.html). If so, show the
+        // "Join this Pairlum?" confirmation instead of the plain "create
+        // your own invite" screen; redeeming only happens if they tap Join
+        // (PairlumSpace.acceptInviteOffer), never automatically here.
+        var pendingCode = null;
+        try{ pendingCode = localStorage.getItem(PENDING_INVITE_KEY); }catch(e){}
+        if(pendingCode){
+          state.inviteCode = pendingCode;
+          return B.invitePreview(pendingCode).then(function(preview){
+            setPairing({ status: "invite_offer", inviteCode: pendingCode, inviteFromName: (preview && preview.inviter_name) || "Your partner", joinedAt: null });
+            return { configured: true, hasSpace: false };
+          }, function(){
+            // Expired/used/garbage code: drop it quietly, fall back to normal.
+            try{ localStorage.removeItem(PENDING_INVITE_KEY); }catch(e){}
+            state.inviteCode = null;
+            setPairing({ status: "not_started", inviteCode: null, joinedAt: null });
+            return { configured: true, hasSpace: false };
+          });
+        }
+        setPairing({ status: "not_started", inviteCode: null, inviteSentAt: null, joinedAt: null });
         return { configured: true, hasSpace: false };
       }
       state.spaceId = membership.spaceId;
@@ -327,21 +346,21 @@ window.PairlumSync = (function(){
         return B.partnerRow(state.spaceId, state.role);
       }).then(function(partner){
         if(partner){
-          setPairing({ status: "joined", joinedAt: partner.joined_at, pendingRequestEmail: null, pendingRequestId: null, inviteCode: null });
+          setPairing({ status: "joined", joinedAt: partner.joined_at, inviteCode: null });
         } else {
-          // No partner yet: restore an in-flight pairing request if one
-          // exists, so a reload doesn't lose the "waiting" screen.
-          return B.myOutgoingRequest(state.myId).then(function(req){
-            state.pendingRequestId = req ? req.id : null;
-            setPairing(req
-              ? { status: "request_sent", pendingRequestEmail: req.to_email, pendingRequestId: req.id, inviteSentAt: req.created_at }
-              : { status: "not_started", pendingRequestEmail: null, pendingRequestId: null, inviteCode: null, inviteSentAt: null });
+          // No partner yet: restore my own in-flight invite, if I made one,
+          // so a reload doesn't lose the "here's your link" screen.
+          return B.myPendingInvite(state.spaceId).then(function(inv){
+            state.inviteCode = inv ? inv.code : null;
+            setPairing(inv
+              ? { status: "invite_ready", inviteCode: inv.code, inviteSentAt: inv.created_at }
+              : { status: "not_started", inviteCode: null, inviteSentAt: null });
           });
         }
       }).then(function(){
         // Restore "left" across a reload — myMembership() only falls back to
         // a 'left' row when there's no active one, so this only overrides
-        // the "joined"/"request_sent" status just computed above, nothing else.
+        // the "joined"/"invite_ready" status just computed above, nothing else.
         if(membership.status === "left") setPairing({ status: "left" });
         installRealtime();
         return { configured: true, hasSpace: true };

@@ -82,61 +82,45 @@ window.PairlumBackend = (function(){
     if(!configured) return need();
     return client.rpc("create_space", { seed: emptySpaceSeed() }).then(function(r){ if(r.error) throw r.error; return r.data; });
   }
-  // Looks up the email in auth.users server-side and creates a pending
-  // request row, denormalizing both emails onto it (see schema.sql's
-  // send_pairing_request) so the recipient's bell can show "who" without a
-  // client ever needing to read auth.users.
-  function sendPairingRequest(spaceId, toEmail){
+  // Creates (or re-fetches) a shareable invite for spaceId — see
+  // schema.sql's create_space_invite. Returns the invite row (its `code` is
+  // what the link/fallback-entry field uses).
+  function createInvite(spaceId){
     if(!configured) return need();
-    return client.rpc("send_pairing_request", { target_space: spaceId, to_email: toEmail }).then(function(r){ if(r.error) throw r.error; return r.data; });
+    return client.rpc("create_space_invite", { target_space: spaceId }).then(function(r){ if(r.error) throw r.error; return r.data; });
   }
-  function cancelPairingRequest(requestId){
+  function revokeInvite(code){
     if(!configured) return need();
-    return client.rpc("cancel_pairing_request", { request_id: requestId }).then(function(r){ if(r.error) throw r.error; });
+    return client.rpc("revoke_space_invite", { invite_code: code }).then(function(r){ if(r.error) throw r.error; });
   }
-  function declinePairingRequest(requestId){
-    if(!configured) return need();
-    return client.rpc("decline_pairing_request", { request_id: requestId }).then(function(r){ if(r.error) throw r.error; });
-  }
-  function acceptPairingRequest(requestId){
-    if(!configured) return need();
-    return client.rpc("accept_pairing_request", { request_id: requestId }).then(function(r){ if(r.error) throw r.error; return r.data; });
-  }
-  // My own latest pending SENT request — restores the "waiting for them to
-  // accept" screen across a reload.
-  function myOutgoingRequest(myId){
+  // My own still-pending invite for spaceId, if I made one — restores the
+  // "here's your link" screen across a reload. A direct table read (not an
+  // RPC): schema.sql's select policy on space_invites already lets the
+  // creator read their own row, same as space_members/spaces elsewhere here.
+  function myPendingInvite(spaceId){
     if(!configured) return Promise.resolve(null);
-    return client.from("pairing_requests").select("id, to_email, created_at")
-      .eq("from_user", myId).eq("status", "pending")
+    return client.from("space_invites").select("code, created_at")
+      .eq("space_id", spaceId).eq("status", "pending")
       .order("created_at", { ascending: false }).limit(1).then(function(r){
         if(r.error) throw r.error;
         return (r.data && r.data[0]) || null;
       });
   }
-  // My pending RECEIVED requests — what the bell shows.
-  function myIncomingRequests(myId){
-    if(!configured) return Promise.resolve([]);
-    return client.from("pairing_requests").select("id, from_email, created_at")
-      .eq("to_user", myId).eq("status", "pending")
-      .order("created_at", { ascending: false }).then(function(r){
-        if(r.error) throw r.error;
-        return r.data || [];
-      });
+  // Read-only: who's this code from, before committing to join (see
+  // schema.sql's invite_preview — the "Join this Pairlum?" screen uses this,
+  // not redeemInvite, until the person actually taps Join).
+  function invitePreview(code){
+    if(!configured) return need();
+    return client.rpc("invite_preview", { invite_code: code }).then(function(r){
+      if(r.error) throw r.error;
+      return (r.data && r.data[0]) || null;
+    });
   }
-  // Keyed by user id (not space id) so it works before the caller has ever
-  // created or joined a space — onIncomingChange fires for requests sent TO
-  // me, onOutgoingChange for changes to requests I sent.
-  function subscribeMyRequests(myId, onIncomingChange, onOutgoingChange){
-    if(!configured) return { unsubscribe: function(){} };
-    var channel = client.channel("pairing-requests-" + myId)
-      .on("postgres_changes", { event: "*", schema: "public", table: "pairing_requests", filter: "to_user=eq." + myId }, function(payload){
-        if(onIncomingChange) onIncomingChange(payload);
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "pairing_requests", filter: "from_user=eq." + myId }, function(payload){
-        if(onOutgoingChange) onOutgoingChange(payload);
-      })
-      .subscribe();
-    return { unsubscribe: function(){ try{ client.removeChannel(channel); }catch(e){} } };
+  // The actual join — only call this after the person has confirmed on the
+  // "Join this Pairlum?" screen.
+  function redeemInvite(code){
+    if(!configured) return need();
+    return client.rpc("redeem_space_invite", { invite_code: code }).then(function(r){ if(r.error) throw r.error; return r.data; });
   }
   // Pauses the space for BOTH partners (server-enforced: write_space_data
   // refuses while either member isn't 'active') until the same account
@@ -237,9 +221,8 @@ window.PairlumBackend = (function(){
     isConfigured: isConfigured,
     getSession: getSession, onAuthChange: onAuthChange, signUp: signUp, signIn: signIn, signOut: signOut,
     myMembership: myMembership, emptySpaceSeed: emptySpaceSeed, createSpace: createSpace,
-    sendPairingRequest: sendPairingRequest, cancelPairingRequest: cancelPairingRequest,
-    declinePairingRequest: declinePairingRequest, acceptPairingRequest: acceptPairingRequest,
-    myOutgoingRequest: myOutgoingRequest, myIncomingRequests: myIncomingRequests, subscribeMyRequests: subscribeMyRequests,
+    createInvite: createInvite, revokeInvite: revokeInvite, myPendingInvite: myPendingInvite,
+    invitePreview: invitePreview, redeemInvite: redeemInvite,
     partnerRow: partnerRow,
     leaveSpace: leaveSpace, rejoinSpace: rejoinSpace, disconnectSpace: disconnectSpace,
     fetchSpace: fetchSpace, writeSpaceData: writeSpaceData, subscribeSpace: subscribeSpace,

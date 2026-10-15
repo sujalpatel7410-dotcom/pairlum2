@@ -45,9 +45,12 @@ That's it — reload `index.html`/`auth.html`/`app.html`. From here on:
 
 - `auth.html` creates/signs in to a real account.
 - The first time you land in `app.html` with no space yet, the Pairing
-  screen (Settings → Pairing) offers **Start a new Pairlum** or **I have a
-  code**. One partner starts, copies the 6-character code, and sends it to
-  the other, who pastes it into **I have a code**.
+  screen (Settings → Partner & pairing) offers **Create invite link**. One
+  partner creates it and shares the link (text, chat, however) with the
+  other — opening it drops a code into that browser, and after signing up
+  or logging in there, a "Join this Pairlum?" screen confirms before
+  anything is paired. (Got just the raw code instead of a working link?
+  **Already have an invite code?** on the same screen takes that too.)
 - From then on, everything (Shared Day, Letters, I Need You, Our Story,
   Our DNA, photos, voice notes, etc.) syncs live between both partners'
   devices.

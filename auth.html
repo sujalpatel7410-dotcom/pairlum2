@@ -46,6 +46,12 @@
   </header>
 
   <main class="pg-main" id="main" tabindex="-1" style="max-width:520px">
+    <div class="auth-hero" id="authHero">
+      <div class="auth-mark" aria-hidden="true"><span></span><span></span></div>
+      <p class="pg-eyebrow" id="authEyebrow">Welcome back</p>
+      <h1 class="pg-h1" id="authHeadline">Still inside each other's day.</h1>
+      <p class="pg-lead" id="authLead">However far apart today, this is where it meets theirs.</p>
+    </div>
     <div class="auth-card">
       <div class="auth-error" id="authError" role="alert"></div>
       <div class="auth-ok" id="authOk" role="status"></div>
@@ -134,6 +140,26 @@
     (function () {
       'use strict';
       var $ = function (s, r) { return (r || document).querySelector(s) };
+
+      // An invite link (?invite=CODE) lands here. Stash the code for
+      // pairlum-sync.js to pick up once a session exists (it may take a
+      // signup + email confirmation, or a Google redirect, to get there —
+      // localStorage survives all of that on this device, a URL param
+      // wouldn't). Strip it from the visible URL either way, and default a
+      // link recipient straight to signup — they're almost always a
+      // brand-new partner, not someone who already has an account here.
+      (function () {
+        var m = /[?&]invite=([^&]+)/.exec(location.search);
+        if (!m) return;
+        try {
+          var ns = window.PAIRLUM_STORAGE_NS || '';
+          localStorage.setItem(ns + 'pairlum-pending-invite', decodeURIComponent(m[1]));
+        } catch (e) { }
+        var rest = location.search.replace(/[?&]invite=[^&]+/, '').replace(/^&/, '?');
+        history.replaceState(null, '', location.pathname + (rest === '?' ? '' : rest) + location.hash);
+        if (!location.hash) location.hash = '#signup';
+      })();
+
       var mode = location.hash === '#signup' ? 'signup' : 'login';
       var tabLogin = $('#tabLogin'), tabSignup = $('#tabSignup'), form = $('#authForm'), submitBtn = $('#authSubmit'), pw = $('#password'), note = $('#authNote'), err = $('#authError'), ok = $('#authOk');
 
@@ -155,6 +181,13 @@
       var alreadyInPanel = $('#alreadyInPanel'), signInOptions = $('#signInOptions'), alreadyInText = $('#alreadyInText');
       var resetRequestPanel = $('#resetRequestPanel'), setNewPasswordPanel = $('#setNewPasswordPanel');
 
+      var heroEyebrow = $('#authEyebrow'), heroHeadline = $('#authHeadline'), heroLead = $('#authLead');
+      function setHero(eyebrow, headline, lead) {
+        if (heroEyebrow) heroEyebrow.textContent = eyebrow;
+        if (heroHeadline) heroHeadline.textContent = headline;
+        if (heroLead) heroLead.textContent = lead;
+      }
+
       // A password-reset email link lands back here with type=recovery (in
       // the hash on older Supabase clients, as a query param on newer ones).
       // detectSessionInUrl has already turned it into a real session by the
@@ -167,6 +200,7 @@
         signInOptions.hidden = true;
         alreadyInPanel.hidden = true;
         setNewPasswordPanel.hidden = false;
+        setHero('Almost there', 'Choose a new password.', 'One more step and you’re back in.');
       }
 
       if (hasSupabase) {
@@ -210,11 +244,13 @@
         signInOptions.hidden = true;
         resetRequestPanel.hidden = false;
         resetEmail.focus();
+        setHero('Forgot your password?', 'Let’s get you back in.', 'We’ll email you a link to set a new one.');
       });
       if (resetBackBtn) resetBackBtn.addEventListener('click', function () {
         showError(''); showOk('');
         resetRequestPanel.hidden = true;
         signInOptions.hidden = false;
+        setMode(mode);
       });
       if (resetSendBtn) resetSendBtn.addEventListener('click', function () {
         showError(''); showOk('');
@@ -293,6 +329,14 @@
         note.textContent = hasSupabase
           ? (signup ? 'Takes a minute. No card required.' : "Don't have a space yet? Switch to Start your First Chapter.")
           : 'Demo mode: no account system is connected yet (see pairlum-config.js). This creates a local, device-only session so you can preview the dashboard.';
+        // Recovery sets its own hero copy above and stays on the new-password
+        // panel regardless of mode — don't stomp on it (setMode still runs
+        // once at init either way, to get the tabs/note/autocomplete right).
+        if (!isRecovery) setHero(
+          signup ? 'Begin your First Chapter' : 'Welcome back',
+          signup ? 'However far apart, still each other’s whole day.' : 'Still inside each other’s day.',
+          signup ? 'A private space just for the two of you — set up in a minute.' : 'Pick up right where you left off.'
+        );
       }
       function showError(msg) { err.textContent = msg || ''; err.classList.toggle('on', !!msg); }
       function showOk(msg) { ok.textContent = msg || ''; ok.classList.toggle('on', !!msg); }

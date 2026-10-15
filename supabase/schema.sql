@@ -66,31 +66,41 @@ alter table public.space_members drop constraint if exists space_members_user_id
 create index if not exists space_members_space_id_idx on public.space_members(space_id);
 create unique index if not exists space_members_one_active_user_idx on public.space_members(user_id) where status = 'active';
 
--- Phase 2: the 6-character invite-code system was replaced by email-based
--- pairing requests (below) — drop it. Pre-launch, throwaway-account project,
--- nothing worth preserving (dropping the table also drops its policy).
+-- Phase 2: the original 6-character invite-code system was replaced by
+-- email-based pairing requests — drop it. (Historical; see git history if
+-- the old create_invite/redeem_invite/revoke_invite shape is ever useful.)
 drop function if exists public.create_invite(uuid);
 drop function if exists public.redeem_invite(text);
 drop function if exists public.revoke_invite(uuid);
 drop table if exists public.invites cascade;
 
--- One row per "A wants to pair with B" request, identified by B's email
--- (clients can't query auth.users directly, so from_email/to_email are
--- captured server-side at insert time — see send_pairing_request below).
-create table if not exists public.pairing_requests (
-  id uuid primary key default gen_random_uuid(),
+-- Phase 3: email-based pairing requests (requiring the client to know the
+-- partner's exact account email) are themselves replaced by a shareable
+-- invite LINK below — simpler for two people who'd rather just tap a link
+-- than look up and type an email address. Same reasoning as the Phase 2
+-- drop above: pre-launch, throwaway-account project, nothing worth
+-- preserving (dropping the table also drops its policy).
+drop function if exists public.send_pairing_request(uuid, text);
+drop function if exists public.cancel_pairing_request(uuid);
+drop function if exists public.decline_pairing_request(uuid);
+drop function if exists public.accept_pairing_request(uuid);
+drop table if exists public.pairing_requests cascade;
+
+-- One row per invite link/code. Short-lived and single-use: `redeem_space_
+-- invite` below marks it 'used' the moment someone joins through it, and a
+-- space only ever needs one live code at a time (create_space_invite reuses
+-- an existing pending one instead of minting duplicates).
+create table if not exists public.space_invites (
+  code text primary key,
   space_id uuid not null references public.spaces(id) on delete cascade,
-  from_user uuid not null references auth.users(id) on delete cascade,
-  from_email text not null,
-  to_user uuid not null references auth.users(id) on delete cascade,
-  to_email text not null,
-  status text not null default 'pending' check (status in ('pending','accepted','declined','cancelled')),
+  created_by uuid not null references auth.users(id) on delete cascade,
+  status text not null default 'pending' check (status in ('pending','used','revoked')),
   created_at timestamptz not null default now(),
-  responded_at timestamptz
+  used_at timestamptz,
+  used_by uuid references auth.users(id)
 );
 
-create index if not exists pairing_requests_to_user_idx on public.pairing_requests(to_user) where status = 'pending';
-create index if not exists pairing_requests_from_user_idx on public.pairing_requests(from_user) where status = 'pending';
+create index if not exists space_invites_space_id_idx on public.space_invites(space_id) where status = 'pending';
 
 -- ---------------------------------------------------------------------------
 -- Helper: is the signed-in user a member of this space? (security definer so
@@ -117,7 +127,7 @@ $$;
 
 alter table public.spaces enable row level security;
 alter table public.space_members enable row level security;
-alter table public.pairing_requests enable row level security;
+alter table public.space_invites enable row level security;
 
 drop policy if exists "members can read their space" on public.spaces;
 create policy "members can read their space" on public.spaces
@@ -133,16 +143,18 @@ drop policy if exists "members can read their membership rows" on public.space_m
 create policy "members can read their membership rows" on public.space_members
   for select using (user_id = auth.uid() or public.is_space_member(space_id));
 
-drop policy if exists "users can read their own pairing requests" on public.pairing_requests;
-create policy "users can read their own pairing requests" on public.pairing_requests
-  for select using (auth.uid() = from_user or auth.uid() = to_user);
--- No insert/update/delete policy: requests are only ever created, accepted,
--- declined or cancelled via the RPCs below (security definer), so a client
--- can never forge a request, nor silently flip another account's response.
+drop policy if exists "creator can read their own invites" on public.space_invites;
+create policy "creator can read their own invites" on public.space_invites
+  for select using (created_by = auth.uid());
+-- No insert/update/delete policy, and no select for anyone but the creator
+-- (a redeemer never needs to read the row directly — redeem_space_invite
+-- below looks it up as security definer and returns the space, not the
+-- invite): every write goes through the RPCs below, so a client can never
+-- forge, revoke someone else's, or peek at a code they weren't given.
 
 -- ---------------------------------------------------------------------------
--- RPCs — the only way clients create a space, send/accept a pairing request,
--- or write data.
+-- RPCs — the only way clients create a space, create/revoke/redeem an
+-- invite, or write data.
 -- ---------------------------------------------------------------------------
 
 -- Create a new space and make the caller its 'a' member. `seed` should be a
@@ -162,20 +174,21 @@ begin
 end;
 $$;
 
--- Send a pairing request to a partner identified by email. Requires the
--- caller to already be an active member of target_space (the client always
--- calls create_space first if it doesn't have one yet — see pairlum-sync.js's
+-- Create (or re-fetch) a shareable invite for target_space. Requires the
+-- caller to already be an active member (the client always calls
+-- create_space first if it doesn't have one yet — see pairlum-sync.js's
 -- ensureSpace) and for that space to still have room for a 'b' member.
--- Looks the email up in auth.users (clients can't query that table directly)
--- and denormalizes both emails onto the row so the recipient's bell can show
--- "who" without ever needing to read auth.users itself.
-create or replace function public.send_pairing_request(target_space uuid, to_email text)
-returns public.pairing_requests language plpgsql security definer as $$
+-- Reuses an existing pending code instead of minting a new one each time
+-- the pairing screen is opened, so an already-shared link doesn't go stale
+-- the moment a second one is generated.
+create or replace function public.create_space_invite(target_space uuid)
+returns public.space_invites language plpgsql security definer as $$
 declare
-  target_id uuid;
-  target_email text;
-  caller_email text;
-  result public.pairing_requests;
+  existing public.space_invites;
+  new_invite public.space_invites;
+  new_code text;
+  chars text := 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; -- no 0/O/1/I — matches app.js's genInviteCode()
+  i int;
 begin
   if not public.is_active_member(target_space) then
     raise exception 'not an active member of this space';
@@ -183,77 +196,83 @@ begin
   if exists(select 1 from public.space_members where space_id = target_space and role = 'b') then
     raise exception 'this space already has two members';
   end if;
-  select email into caller_email from auth.users where id = auth.uid();
-  select id, email into target_id, target_email from auth.users where lower(email) = lower(trim(to_email)) limit 1;
-  if target_id is null then
-    raise exception 'no Pairlum account found with that email';
+  select * into existing from public.space_invites
+    where space_id = target_space and status = 'pending'
+    order by created_at desc limit 1;
+  if existing.code is not null then
+    return existing;
   end if;
-  if target_id = auth.uid() then
-    raise exception 'you can''t send a pairing request to yourself';
-  end if;
-  if exists(select 1 from public.space_members where user_id = target_id and status = 'active') then
-    raise exception 'that person is already paired with someone';
-  end if;
-  -- Replace any previous pending request from this space so retrying with a
-  -- different (e.g. mistyped) email doesn't leave stale duplicates behind.
-  update public.pairing_requests set status = 'cancelled', responded_at = now()
-    where space_id = target_space and status = 'pending';
-  insert into public.pairing_requests(space_id, from_user, from_email, to_user, to_email)
-    values (target_space, auth.uid(), caller_email, target_id, target_email)
-    returning * into result;
-  return result;
+  loop
+    new_code := '';
+    for i in 1..8 loop
+      new_code := new_code || substr(chars, 1 + floor(random() * length(chars))::int, 1);
+    end loop;
+    exit when not exists(select 1 from public.space_invites where code = new_code);
+  end loop;
+  insert into public.space_invites(code, space_id, created_by) values (new_code, target_space, auth.uid())
+    returning * into new_invite;
+  return new_invite;
 end;
 $$;
 
--- Sender cancels their own still-pending request (the "Cancel request" button).
-create or replace function public.cancel_pairing_request(request_id uuid)
+-- Creator cancels their own still-pending invite (the "Revoke" button) — the
+-- link stops working immediately even if someone still has it open.
+create or replace function public.revoke_space_invite(invite_code text)
 returns void language plpgsql security definer as $$
 begin
-  update public.pairing_requests set status = 'cancelled', responded_at = now()
-    where id = request_id and from_user = auth.uid() and status = 'pending';
+  update public.space_invites set status = 'revoked'
+    where code = upper(trim(invite_code)) and created_by = auth.uid() and status = 'pending';
   if not found then
-    raise exception 'that request is no longer available';
+    raise exception 'that invite is no longer available';
   end if;
 end;
 $$;
 
--- Recipient declines a pending request.
-create or replace function public.decline_pairing_request(request_id uuid)
-returns void language plpgsql security definer as $$
+-- Lets whoever holds a pending code see who it's from before they commit to
+-- joining — the "Join this Pairlum?" confirmation screen, shown BEFORE
+-- redeem_space_invite ever runs. Security definer: the code itself is the
+-- credential here, same as everywhere else a link/code gates access, so no
+-- separate read policy on space_invites is needed for this.
+create or replace function public.invite_preview(invite_code text)
+returns table(inviter_name text) language plpgsql security definer as $$
+declare
+  inv public.space_invites;
 begin
-  update public.pairing_requests set status = 'declined', responded_at = now()
-    where id = request_id and to_user = auth.uid() and status = 'pending';
-  if not found then
-    raise exception 'that request is no longer available';
+  select * into inv from public.space_invites where code = upper(trim(invite_code)) and status = 'pending';
+  if inv is null then
+    raise exception 'That invite link has expired or already been used.';
   end if;
+  return query
+    select coalesce(s.data->'profiles'->'u_aarav'->>'name', 'Your partner') from public.spaces s where s.id = inv.space_id;
 end;
 $$;
 
--- Recipient accepts: joins the sender's space as role 'b'. Returns the space row.
-create or replace function public.accept_pairing_request(request_id uuid)
+-- The actual join step: only ever called after the person has explicitly
+-- confirmed "Join this Pairlum?" in the UI (opening the link alone shows
+-- that confirmation, it does not redeem anything by itself). Joins the
+-- inviter's space as role 'b' and marks the code used so it can't be reused.
+create or replace function public.redeem_space_invite(invite_code text)
 returns public.spaces language plpgsql security definer as $$
 declare
-  req public.pairing_requests;
+  inv public.space_invites;
   result public.spaces;
 begin
-  select * into req from public.pairing_requests where id = request_id and to_user = auth.uid() and status = 'pending';
-  if req is null then
-    raise exception 'that request is no longer available';
+  select * into inv from public.space_invites where code = upper(trim(invite_code)) and status = 'pending';
+  if inv is null then
+    raise exception 'That invite link has expired or already been used.';
+  end if;
+  if inv.created_by = auth.uid() then
+    raise exception 'you can''t use your own invite link';
   end if;
   if exists(select 1 from public.space_members where user_id = auth.uid() and status = 'active') then
     raise exception 'you already belong to a space';
   end if;
-  if exists(select 1 from public.space_members where space_id = req.space_id and role = 'b') then
+  if exists(select 1 from public.space_members where space_id = inv.space_id and role = 'b') then
     raise exception 'this space already has two members';
   end if;
-  insert into public.space_members(space_id, user_id, role) values (req.space_id, auth.uid(), 'b');
-  update public.pairing_requests set status = 'accepted', responded_at = now() where id = req.id;
-  -- Clean up any other stale pending requests involving either party, so
-  -- duplicates don't linger in either account's bell after this pairing.
-  update public.pairing_requests set status = 'cancelled', responded_at = now()
-    where status = 'pending' and id <> req.id
-      and (from_user in (req.from_user, req.to_user) or to_user in (req.from_user, req.to_user));
-  select * into result from public.spaces where id = req.space_id;
+  insert into public.space_members(space_id, user_id, role) values (inv.space_id, auth.uid(), 'b');
+  update public.space_invites set status = 'used', used_at = now(), used_by = auth.uid() where code = inv.code;
+  select * into result from public.spaces where id = inv.space_id;
   return result;
 end;
 $$;
@@ -325,12 +344,12 @@ $$;
 grant usage on schema public to anon, authenticated;
 grant select, update on public.spaces to authenticated;
 grant select on public.space_members to authenticated;
-grant select on public.pairing_requests to authenticated;
+grant select on public.space_invites to authenticated;
 grant execute on function public.create_space(jsonb) to authenticated;
-grant execute on function public.send_pairing_request(uuid, text) to authenticated;
-grant execute on function public.cancel_pairing_request(uuid) to authenticated;
-grant execute on function public.decline_pairing_request(uuid) to authenticated;
-grant execute on function public.accept_pairing_request(uuid) to authenticated;
+grant execute on function public.create_space_invite(uuid) to authenticated;
+grant execute on function public.revoke_space_invite(text) to authenticated;
+grant execute on function public.invite_preview(text) to authenticated;
+grant execute on function public.redeem_space_invite(text) to authenticated;
 grant execute on function public.write_space_data(uuid, jsonb, integer) to authenticated;
 grant execute on function public.is_space_member(uuid) to authenticated;
 grant execute on function public.is_active_member(uuid) to authenticated;
@@ -339,19 +358,17 @@ grant execute on function public.rejoin_space(uuid) to authenticated;
 grant execute on function public.disconnect_space(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- Realtime: let a client subscribe to changes on its own space row, to its
--- own space_members rows (so a sender's device learns the moment the other
--- partner accepts, without polling), and to its own pairing_requests rows
--- (so a brand-new, spaceless account can see an incoming request live).
+-- Realtime: let a client subscribe to changes on its own space row, and to
+-- its own space_members rows (so the inviter's device learns the moment the
+-- partner redeems the invite and joins, without polling). space_invites
+-- doesn't need realtime — redemption shows up as a space_members INSERT,
+-- which is already covered here.
 -- ---------------------------------------------------------------------------
 do $$ begin
   alter publication supabase_realtime add table public.spaces;
 exception when duplicate_object then null; end $$;
 do $$ begin
   alter publication supabase_realtime add table public.space_members;
-exception when duplicate_object then null; end $$;
-do $$ begin
-  alter publication supabase_realtime add table public.pairing_requests;
 exception when duplicate_object then null; end $$;
 
 -- ---------------------------------------------------------------------------

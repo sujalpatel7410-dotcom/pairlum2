@@ -94,7 +94,8 @@
       try {
         // the look is private to each person, so the key ends in who this tab is
         var ns = window.PAIRLUM_STORAGE_NS || "", who = null;
-        if (/[?&]as=/i.test(location.search)) who = /[?&]as=[a-z_]*mira/i.test(location.search) ? "u_mira" : "u_aarav";
+        var real = window.PairlumSpace && window.PairlumSpace.isConfigured();
+        if (!real && /[?&]as=/i.test(location.search)) who = /[?&]as=[a-z_]*mira/i.test(location.search) ? "u_mira" : "u_aarav";
         if (!who) { try { who = sessionStorage.getItem(ns + "pairlum-me-v1"); } catch (e) { } }
         who = who === "u_mira" ? "u_mira" : "u_aarav";
         var m = localStorage.getItem(ns + "pairlum-mood-v1-" + who);

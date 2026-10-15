@@ -358,10 +358,17 @@
   var SHARED_KEY = NS + "pairlum-shared-space-v1";
   function resolveMe() {
     var m = null;
-    try {
-      var q = /[?&]as=([a-z_]+)/i.exec(window.location.search);
-      if (q) m = /mira/i.test(q[1]) ? "u_mira" : "u_aarav";
-    } catch (e) { }
+    // ?as= is the demo's two-tabs-as-two-partners switch. With a real
+    // backend, who you are comes from your signed-in role (pairlum-sync.js
+    // stores it in ME_KEY before this file loads) — a URL must never be
+    // able to make one account act as the other partner.
+    var real = window.PairlumSpace && window.PairlumSpace.isConfigured();
+    if (!real) {
+      try {
+        var q = /[?&]as=([a-z_]+)/i.exec(window.location.search);
+        if (q) m = /mira/i.test(q[1]) ? "u_mira" : "u_aarav";
+      } catch (e) { }
+    }
     try { if (m) sessionStorage.setItem(ME_KEY, m); else m = sessionStorage.getItem(ME_KEY); } catch (e) { }
     return m === "u_mira" ? "u_mira" : "u_aarav";
   }
@@ -7296,14 +7303,6 @@
     var pairingOverlay = document.getElementById("pairingOverlay");
     if (pairingOverlay && pairingOverlay.classList.contains("is-open")) renderPairingOverlay();
   });
-  // pairlum-sync.js dispatches this whenever my incoming pairing requests
-  // change (initial fetch, or realtime) — refresh the bell, and the inbox
-  // too if it's already open, same pattern as the storage listeners above.
-  window.addEventListener("pairlum:incoming-requests", function () {
-    renderBell();
-    if (overlayOpen("inboxOverlay")) renderInbox();
-  });
-
   // Two-partner preview: which partner this tab is. A real login replaces this.
   function wireViewingAs() {
     var box = document.getElementById("viewingAs");
@@ -7520,7 +7519,8 @@
       not_started: '<span class="pairing-status-badge pairing-status-badge--none">Not started</span>',
       invite_sent: '<span class="pairing-status-badge pairing-status-badge--waiting">Waiting for ' + escapeHtml(p.name) + '</span>',
       waiting: '<span class="pairing-status-badge pairing-status-badge--waiting">Waiting for ' + escapeHtml(p.name) + '</span>',
-      request_sent: '<span class="pairing-status-badge pairing-status-badge--waiting">Waiting to be accepted</span>',
+      invite_ready: '<span class="pairing-status-badge pairing-status-badge--waiting">Link ready</span>',
+      invite_offer: '<span class="pairing-status-badge pairing-status-badge--waiting">Invite received</span>',
       expired: '<span class="pairing-status-badge pairing-status-badge--expired">Invite expired</span>',
       joined: '<span class="pairing-status-badge pairing-status-badge--joined">' + escapeHtml(p.name) + ' is here — connected</span>'
     }[status];
@@ -7530,20 +7530,35 @@
     if (status === "not_started" && isReal) {
       html +=
         '<h3 class="disp-3" style="margin-top:10px">Start your Pairlum</h3>' +
-        '<p class="body-m">Enter your partner\'s email — they\'ll get a request to accept, and your shared space starts the moment they do.</p>' +
-        '<label class="field"><span class="field-label">Partner\'s email</span><input type="email" id="pairingRequestEmail" class="confirm-input" placeholder="partner@email.com" autocomplete="off"></label>' +
-        '<button class="btn-primary" id="pairingSendRequestBtn" type="button" style="width:100%;margin-top:6px">Send request →</button>' +
-        '<p class="auth-note" id="pairingRequestNote" style="margin-top:8px"></p>';
+        '<p class="body-m">Create a link and send it to your partner any way you like — text, chat, however. The moment they open it and confirm, your shared space begins.</p>' +
+        '<button class="btn-primary" id="pairingCreateInviteBtn" type="button" style="width:100%;margin-top:6px">Create invite link →</button>' +
+        '<p class="auth-note" id="pairingCreateNote" style="margin-top:8px"></p>' +
+        '<p class="body-s" style="margin-top:14px"><button type="button" class="ambient-link" id="pairingHaveCodeBtn">Already have an invite code?</button></p>' +
+        '<div id="pairingCodePanel" hidden>' +
+        '<label class="field"><span class="field-label">Invite code</span><input type="text" id="pairingCodeInput" class="confirm-input" placeholder="ABCD1234" autocomplete="off" maxlength="8" style="text-transform:uppercase"></label>' +
+        '<button class="btn-primary" id="pairingRedeemCodeBtn" type="button" style="width:100%">Join →</button>' +
+        '<p class="auth-note" id="pairingCodeNote" style="margin-top:8px"></p>' +
+        '</div>';
     } else if (status === "not_started") {
       html +=
         '<h3 class="disp-3" style="margin-top:10px">Invite ' + escapeHtml(p.name) + ' to your Pairlum</h3>' +
         '<p class="body-m">This is a private space just for the two of you. Nothing shows here until ' + escapeHtml(p.name) + ' joins too.</p>' +
         '<button class="btn-primary" id="pairingCreateBtn" type="button" style="width:100%;margin-top:6px">Invite ' + escapeHtml(p.name) + ' →</button>';
-    } else if (status === "request_sent") {
+    } else if (status === "invite_ready") {
+      var inviteLink = location.origin + "/auth.html?invite=" + encodeURIComponent(SPACE.pairing.inviteCode || "");
       html +=
-        '<h3 class="disp-3" style="margin-top:10px">Request sent to ' + escapeHtml(SPACE.pairing.pendingRequestEmail || "") + '</h3>' +
-        '<p class="body-m">Your Shared Day starts the moment they accept — this updates on its own, no need to reopen this screen.</p>' +
-        '<div class="confirm-actions"><button class="btn-danger" id="pairingCancelRequestBtn" type="button">Cancel request</button></div>';
+        '<h3 class="disp-3" style="margin-top:10px">Share this link</h3>' +
+        '<p class="body-m">Anyone who opens it can join this space, so share it only with the person you mean to pair with. Your Shared Day starts the moment they confirm.</p>' +
+        '<div class="invite-code-box"><span class="code" id="pairingInviteLink" style="font-size:.8rem;word-break:break-all">' + escapeHtml(inviteLink) + '</span><button type="button" id="pairingCopyBtn">Copy</button></div>' +
+        '<button class="btn-ghost" id="pairingShareBtn" type="button" style="width:100%;margin-top:8px">Share link →</button>' +
+        '<p class="body-s" style="margin-top:10px">Or share the code directly: <strong>' + escapeHtml(SPACE.pairing.inviteCode || "") + '</strong></p>' +
+        '<div class="confirm-actions"><button class="btn-danger" id="pairingRevokeBtn" type="button">Revoke link</button></div>';
+    } else if (status === "invite_offer") {
+      html +=
+        '<h3 class="disp-3" style="margin-top:10px">Join ' + escapeHtml(SPACE.pairing.inviteFromName || "their") + '’s Pairlum?</h3>' +
+        '<p class="body-m">You’re about to pair your account with theirs. From then on, Shared Day, Our Story, Letters and everything else here is shared only between the two of you.</p>' +
+        '<p class="auth-note" id="pairingJoinNote" style="margin-top:8px"></p>' +
+        '<div class="confirm-actions"><button class="btn-ghost" id="pairingDeclineInviteBtn" type="button">Not now</button><button class="btn-primary" id="pairingJoinInviteBtn" type="button">Join →</button></div>';
     } else if (status === "invite_sent" || status === "waiting") {
       html +=
         '<h3 class="disp-3" style="margin-top:10px">Waiting for ' + escapeHtml(p.name) + '</h3>' +
@@ -7587,7 +7602,7 @@
   }
 
   function wirePairingBodyEvents() {
-    // Demo-mode only: real mode renders pairingSendRequestBtn instead (below).
+    // Demo-mode only: real mode renders pairingCreateInviteBtn instead (below).
     var createBtn = document.getElementById("pairingCreateBtn");
     if (createBtn) createBtn.addEventListener("click", function () {
       SPACE.pairing.status = "invite_sent";
@@ -7599,42 +7614,89 @@
       applyPairingGate();
       showToast("Invite created for " + SPACE.partner.name + ".");
     });
-    var sendRequestBtn = document.getElementById("pairingSendRequestBtn");
-    if (sendRequestBtn) sendRequestBtn.addEventListener("click", function () {
-      var note = document.getElementById("pairingRequestNote");
-      var email = (document.getElementById("pairingRequestEmail").value || "").trim();
-      if (!email) { note.textContent = "Enter your partner's email."; return; }
-      sendRequestBtn.disabled = true; note.textContent = "Sending…";
-      window.PairlumSpace.sendRequest(email).catch(function (err) {
-        sendRequestBtn.disabled = false;
-        note.textContent = err && err.message ? err.message : "Couldn't send that request. Try again.";
-      });
-    });
-    var cancelRequestBtn = document.getElementById("pairingCancelRequestBtn");
-    if (cancelRequestBtn) cancelRequestBtn.addEventListener("click", function () {
-      cancelRequestBtn.disabled = true;
-      window.PairlumSpace.cancelRequest().then(function () {
-        renderPairingOverlay();
-        renderSpaceBindings();
-        applyPairingGate();
-        showToast("Request cancelled.");
-      }, function (err) {
-        cancelRequestBtn.disabled = false;
-        showToast(err && err.message ? err.message : "Couldn't cancel that request. Try again.", true);
-      });
-    });
     var signOutBtn = document.getElementById("pairingSignOutBtn");
     if (signOutBtn) signOutBtn.addEventListener("click", function () { window.PairlumSpace.signOut(); });
-    // Demo-mode only (invite_sent/waiting branch): real mode never reaches
-    // this status anymore, see pairingSendRequestBtn/pairingCancelRequestBtn.
+
+    // ---- real mode: create an invite link, or redeem one typed by hand ----
+    var createInviteBtn = document.getElementById("pairingCreateInviteBtn");
+    if (createInviteBtn) createInviteBtn.addEventListener("click", function () {
+      var note = document.getElementById("pairingCreateNote");
+      createInviteBtn.disabled = true; if (note) note.textContent = "Creating your link…";
+      window.PairlumSpace.createInvite().then(function () {
+        renderPairingOverlay();
+      }, function (err) {
+        createInviteBtn.disabled = false;
+        if (note) note.textContent = err && err.message ? err.message : "Couldn't create a link. Try again.";
+      });
+    });
+    var haveCodeBtn = document.getElementById("pairingHaveCodeBtn");
+    if (haveCodeBtn) haveCodeBtn.addEventListener("click", function () {
+      var panel = document.getElementById("pairingCodePanel");
+      panel.hidden = !panel.hidden;
+      if (!panel.hidden) document.getElementById("pairingCodeInput").focus();
+    });
+    var redeemCodeBtn = document.getElementById("pairingRedeemCodeBtn");
+    if (redeemCodeBtn) redeemCodeBtn.addEventListener("click", function () {
+      var note = document.getElementById("pairingCodeNote");
+      var code = (document.getElementById("pairingCodeInput").value || "").trim();
+      if (!code) { note.textContent = "Enter the invite code."; return; }
+      redeemCodeBtn.disabled = true; note.textContent = "Joining…";
+      window.PairlumSpace.acceptInviteOffer(code).catch(function (err) {
+        redeemCodeBtn.disabled = false;
+        note.textContent = err && err.message ? err.message : "That code didn't work. Check it and try again.";
+      });
+    });
+
+    // ---- real mode: my own ready-to-share link ----
+    var inviteLinkEl = document.getElementById("pairingInviteLink");
     var copyBtn = document.getElementById("pairingCopyBtn");
     if (copyBtn) copyBtn.addEventListener("click", function () {
-      var text = "Join me on Pairlum — code " + (SPACE.pairing.inviteCode || "");
+      // invite_ready (real mode, inviteLinkEl present) copies the link;
+      // invite_sent/waiting (demo mode) copies a code-only message instead.
+      var text = inviteLinkEl ? inviteLinkEl.textContent : ("Join me on Pairlum — code " + (SPACE.pairing.inviteCode || ""));
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(function () { showToast("Invite copied."); }, function () { showToast("Couldn't copy — code is " + SPACE.pairing.inviteCode); });
+        navigator.clipboard.writeText(text).then(function () { showToast("Copied."); }, function () { showToast("Couldn't copy — it's " + text); });
       } else {
-        showToast("Code: " + SPACE.pairing.inviteCode);
+        showToast(text);
       }
+    });
+    var shareBtn = document.getElementById("pairingShareBtn");
+    if (shareBtn) shareBtn.addEventListener("click", function () {
+      var link = inviteLinkEl ? inviteLinkEl.textContent : "";
+      if (navigator.share) {
+        navigator.share({ title: "Join me on Pairlum", url: link }).catch(function () { });
+      } else if (copyBtn) {
+        copyBtn.click();
+      }
+    });
+    var revokeBtn = document.getElementById("pairingRevokeBtn");
+    if (revokeBtn) revokeBtn.addEventListener("click", function () {
+      revokeBtn.disabled = true;
+      window.PairlumSpace.revokeInvite().then(function () {
+        renderPairingOverlay();
+        showToast("Link revoked — it no longer works.");
+      }, function (err) {
+        revokeBtn.disabled = false;
+        showToast(err && err.message ? err.message : "Couldn't revoke that link. Try again.", true);
+      });
+    });
+
+    // ---- real mode: someone else's link, offered to me ----
+    var joinInviteBtn = document.getElementById("pairingJoinInviteBtn");
+    if (joinInviteBtn) joinInviteBtn.addEventListener("click", function () {
+      var note = document.getElementById("pairingJoinNote");
+      joinInviteBtn.disabled = true; if (note) note.textContent = "Joining…";
+      window.PairlumSpace.acceptInviteOffer().catch(function (err) {
+        joinInviteBtn.disabled = false;
+        if (note) note.textContent = err && err.message ? err.message : "Couldn't join. The link may have expired — ask for a new one.";
+      });
+    });
+    var declineInviteBtn = document.getElementById("pairingDeclineInviteBtn");
+    if (declineInviteBtn) declineInviteBtn.addEventListener("click", function () {
+      window.PairlumSpace.declineInviteOffer();
+      renderPairingOverlay();
+      renderSpaceBindings();
+      applyPairingGate();
     });
     var resendBtn = document.getElementById("pairingResendBtn");
     if (resendBtn) resendBtn.addEventListener("click", function () {
@@ -10040,14 +10102,8 @@
       if (target && motionAllowed()) { target.classList.remove("is-pointed"); void target.offsetWidth; target.classList.add("is-pointed"); }
     }, 380);
   }
-  // Pending pairing requests sent TO me — kept live by pairlum-sync.js
-  // (window.PairlumSpace.incomingRequests()); empty/absent in demo mode or
-  // before boot has fetched anything yet.
-  function incomingPairingRequests() {
-    return (window.PairlumSpace && window.PairlumSpace.incomingRequests) ? window.PairlumSpace.incomingRequests() : [];
-  }
   function renderBell() {
-    var n = unreadCount() + incomingPairingRequests().length, badge = document.getElementById("bellCount"), bell = document.getElementById("notifBell");
+    var n = unreadCount(), badge = document.getElementById("bellCount"), bell = document.getElementById("notifBell");
     if (badge) { badge.hidden = !n; badge.textContent = n > 9 ? "9+" : String(n); }
     if (bell) {
       bell.classList.toggle("has-unread", n > 0);
@@ -10059,21 +10115,12 @@
     var body = document.getElementById("inboxBody");
     if (!body) return;
     var p = SPACE.partner, quiet = isQuietNow();
-    var requests = incomingPairingRequests();
     var html = "";
     if (quiet) html += '<p class="inbox-quiet">Quiet hours are on until ' + escapeHtml(clockLabel(SPACE.quietHours.end)) + '. Anything new waits here without a sound. “I Need You” still comes through.</p>';
-    if (requests.length) {
-      html += '<p class="eyebrow inbox-group">Pairing requests</p><ul class="inbox-list">' + requests.map(function (r) {
-        return '<li class="inbox-request" data-request-id="' + escapeHtml(r.id) + '">' +
-          '<span class="inbox-copy"><span class="inbox-text">' + escapeHtml(r.from_email) + ' wants to pair with you</span><span class="inbox-meta">' + agoLabel(Date.parse(r.created_at) || Date.now()) + '</span></span>' +
-          '<span class="inbox-request-actions"><button type="button" class="btn-ghost" data-request-decline>Decline</button><button type="button" class="btn-primary" data-request-accept>Accept</button></span>' +
-          '</li>';
-      }).join("") + '</ul>';
-    }
-    if (!INBOX.length && !requests.length) {
+    if (!INBOX.length) {
       html += '<div class="inbox-empty">' + emptyArt("timeline") + '<p class="body-l" style="color:var(--ink)">Nothing new just now.</p>' +
         '<p class="body-s">When ' + escapeHtml(p.name) + ' shares, writes or plans something, it lands here. No streaks, no reminders to come back.</p></div>';
-    } else if (INBOX.length) {
+    } else {
       var startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
       var group = function (title, items) {
         if (!items.length) return "";
@@ -10101,27 +10148,6 @@
         closeOverlay("inboxOverlay");
         if (item && item.moment && momentById(item.moment)) { openMoment(item.moment); return; } // an answer opens the moment it belongs to
         if (item && item.view) goTo(item.view, item.target);
-      });
-    });
-    body.querySelectorAll(".inbox-request").forEach(function (row) {
-      var id = row.getAttribute("data-request-id");
-      var acceptBtn = row.querySelector("[data-request-accept]");
-      var declineBtn = row.querySelector("[data-request-decline]");
-      acceptBtn.addEventListener("click", function () {
-        acceptBtn.disabled = true; declineBtn.disabled = true;
-        window.PairlumSpace.acceptIncomingRequest(id).catch(function (err) {
-          acceptBtn.disabled = false; declineBtn.disabled = false;
-          showToast(err && err.message ? err.message : "Couldn't accept that request. Try again.", true);
-        });
-      });
-      declineBtn.addEventListener("click", function () {
-        acceptBtn.disabled = true; declineBtn.disabled = true;
-        window.PairlumSpace.declineIncomingRequest(id).then(function () {
-          renderBell(); renderInbox();
-        }, function (err) {
-          acceptBtn.disabled = false; declineBtn.disabled = false;
-          showToast(err && err.message ? err.message : "Couldn't decline that request. Try again.", true);
-        });
       });
     });
   }
