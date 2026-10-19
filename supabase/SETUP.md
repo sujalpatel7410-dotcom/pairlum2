@@ -35,6 +35,13 @@ what it changes; they're safe to run twice and don't delete existing data.
   channel ("I Need You" live listening) is private to the couple. **Run this
   one before loading the updated app** — the app now joins that channel as
   private, which only works once these rules exist.
+- `20261019130000_memberships.sql` — plans and Pairlum Book eligibility come
+  from the server only. Adds a `memberships` table the app can read but
+  never write, and a `my_membership()` function that decides Book
+  eligibility (one full year on the Book plan). The app's "Switch plan"
+  preview is gone in real accounts; until payments exist, the membership
+  screen says plans open soon. To give a test space a plan by hand, see the
+  comment at the top of that file.
 
 ## 3. Turn on Realtime (usually already on)
 
@@ -192,10 +199,13 @@ dashboard once real people are using it.
 Two things need their own third-party account that only you can create —
 they're left as clearly-labeled placeholders, not wired to real money/APIs:
 
-- **Membership payments** — choosing a plan just records the choice (see
-  `app.js`'s membership overlay, which already says "Preview only: nothing
-  is charged"). Wiring a real charge means adding a Razorpay/Stripe account
-  and a server-side webhook; ask if you want this built out.
+- **Membership payments** — not connected yet. In real accounts the
+  membership screen says plans open soon and nothing can be switched; plans
+  live in the server-only `memberships` table. Wiring real charges means a
+  Razorpay (or Stripe) account plus a server function that creates the
+  order and a webhook that, once a payment is confirmed, writes the
+  `memberships` row (one year, no auto-renewal) — the app already reads it
+  and updates live. Ask when you're ready to build it.
 - **Google Photos import** — needs a Google Cloud OAuth client ID in
   `pairlum-config.js`'s `googleClientId` (already set), with the **Google
   Photos Picker API** enabled for that Cloud project and your site listed

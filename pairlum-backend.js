@@ -157,6 +157,13 @@ window.PairlumBackend = (function(){
     if(!configured) return need();
     return client.rpc("disconnect_space", { target_space: spaceId }).then(function(r){ if(r.error) throw r.error; });
   }
+  // The space's plan, with Book eligibility decided by the server (schema.sql's
+  // my_membership): { plan, started_at, ends_at, active, book_eligible_at,
+  // book_eligible }, or null for the free First Chapter.
+  function planMembership(spaceId){
+    if(!configured) return Promise.resolve(null);
+    return rpc("my_membership", { target_space: spaceId }).then(function(rows){ return (rows && rows[0]) || null; });
+  }
   // Ends this account's pairing(s) like disconnectSpace, then deletes the
   // login itself (schema.sql's delete_my_account). Irreversible.
   function deleteMyAccount(){
@@ -197,7 +204,9 @@ window.PairlumBackend = (function(){
   // low-latency broadcast sent via the returned `broadcast()` — used for
   // "I Need You" live-audio WebRTC signaling (offer/answer/ICE), which must
   // never wait on a database round-trip.
-  function subscribeSpace(spaceId, onSpaceChange, onMemberJoin, onMemberUpdate, onBroadcast){
+  // cb5(payload), when given, fires whenever this space's plan changes (e.g.
+  // after a payment), so both devices update without a reload.
+  function subscribeSpace(spaceId, onSpaceChange, onMemberJoin, onMemberUpdate, onBroadcast, onPlanChange){
     if(!configured) return { unsubscribe: function(){}, broadcast: function(){} };
     // Private channel: Supabase checks the realtime.messages policies in
     // schema.sql, so only this space's members can receive (and only active
@@ -212,6 +221,9 @@ window.PairlumBackend = (function(){
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "space_members", filter: "space_id=eq." + spaceId }, function(payload){
         if(onMemberUpdate) onMemberUpdate(payload.new);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "memberships", filter: "space_id=eq." + spaceId }, function(payload){
+        if(onPlanChange) onPlanChange(payload);
       })
       .on("broadcast", { event: "signal" }, function(msg){
         if(onBroadcast) onBroadcast(msg.payload);
@@ -252,6 +264,7 @@ window.PairlumBackend = (function(){
     invitePreview: invitePreview, redeemInvite: redeemInvite,
     partnerRow: partnerRow,
     leaveSpace: leaveSpace, rejoinSpace: rejoinSpace, disconnectSpace: disconnectSpace, deleteMyAccount: deleteMyAccount,
+    planMembership: planMembership,
     fetchSpace: fetchSpace, writeSpaceData: writeSpaceData, subscribeSpace: subscribeSpace,
     uploadMedia: uploadMedia, downloadMedia: downloadMedia, deleteMedia: deleteMedia
   };

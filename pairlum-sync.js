@@ -174,6 +174,35 @@ window.PairlumSync = (function(){
       if(!msg || SIGNAL_KEYS.indexOf(msg.key) === -1) return;
       writeLocal(msg.key, msg.value);
       dispatchStorage(msg.key, msg.value);
+    }, function(){
+      // The plan changed on the server (e.g. a payment went through).
+      refreshPlan();
+    });
+  }
+
+  // ---- the space's plan (server-owned — see schema.sql's memberships) ----
+  // Kept as { known, plan, at } under PLAN_KEY so app.js can read it
+  // synchronously as it loads. plan is null for the free First Chapter;
+  // known is false only when the server couldn't be asked, so app.js can say
+  // so instead of pretending. Book eligibility is the server's answer, never
+  // worked out here or in app.js.
+  var PLAN_KEY = NS + "pairlum-plan-v1";
+  function setPlan(value){
+    var json = JSON.stringify(value);
+    writeLocal(PLAN_KEY, json);
+    try{ window.dispatchEvent(new CustomEvent("pairlum:plan", { detail: value })); }catch(e){}
+  }
+  function refreshPlan(){
+    if(!state.spaceId){ setPlan({ known: true, plan: null, at: Date.now() }); return Promise.resolve(); }
+    return B.planMembership(state.spaceId).then(function(p){
+      setPlan({ known: true, at: Date.now(), plan: p ? {
+        plan: p.plan, startedAt: p.started_at, endsAt: p.ends_at, active: !!p.active,
+        bookEligibleAt: p.book_eligible_at, bookEligible: !!p.book_eligible
+      } : null });
+    }, function(){
+      // Keep whatever was last known; if nothing was, say it's unknown.
+      var prev = readJson(PLAN_KEY);
+      if(!prev || prev.known === undefined) setPlan({ known: false, plan: null, at: Date.now() });
     });
   }
 
@@ -338,6 +367,8 @@ window.PairlumSync = (function(){
     hasSpace: function(){ return !!state.spaceId; },
     role: function(){ return state.role; },
     inviteTokenFrom: inviteTokenFrom,
+    // The space's plan as last fetched from the server: { known, plan, at }.
+    plan: function(){ return readJson(PLAN_KEY); },
     // A link (or token) pasted into the pairing screen goes through exactly
     // the same path as one opened from a message: keep it, reload, and let
     // boot() show the "Join our Pairlum?" confirmation with the inviter's
@@ -536,6 +567,7 @@ window.PairlumSync = (function(){
       writeLocal(SHARED_KEY, JSON.stringify(B.emptySpaceSeed()));
       try{ sessionStorage.setItem(ME_KEY, "u_aarav"); }catch(e){}
       setPairing(offer || { status: "not_started", inviteId: null, inviteToken: null, inviteExpiresAt: null, joinedAt: null });
+      setPlan({ known: true, plan: null, at: Date.now() }); // no space yet = no plan
       return { configured: true, hasSpace: false };
     }
     state.spaceId = membership.spaceId;
@@ -545,6 +577,10 @@ window.PairlumSync = (function(){
     return B.fetchSpace(state.spaceId).then(function(row){
       state.serverRev = row.rev;
       writeLocal(SHARED_KEY, JSON.stringify(row.data));
+      // The plan is fetched before app.js loads (it reads it synchronously).
+      // refreshPlan never rejects, so a slow or failed check can't block boot.
+      return refreshPlan();
+    }).then(function(){
       return B.partnerRow(state.spaceId, state.role);
     }).then(function(partner){
       if(partner){

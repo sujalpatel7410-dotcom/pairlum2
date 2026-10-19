@@ -7359,6 +7359,10 @@
     var pairingOverlay = document.getElementById("pairingOverlay");
     if (pairingOverlay && pairingOverlay.classList.contains("is-open")) renderPairingOverlay();
   });
+  // The space's plan changed on the server (pairlum-sync.js): Book status,
+  // founder access and the membership screen follow it straight away.
+  window.addEventListener("pairlum:plan", function () { renderMore(); });
+
   // Two-partner preview: which partner this tab is. A real login replaces this.
   function wireViewingAs() {
     var box = document.getElementById("viewingAs");
@@ -9790,13 +9794,34 @@
     try { return new Intl.NumberFormat(cfg.locale || "en-IN", { style: "currency", currency: cfg.currency || "INR", maximumFractionDigits: 0 }).format(pl.amount); }
     catch (e) { return String(pl.amount); }
   }
-  function membership() { return DB.membership && planById(DB.membership.plan) ? DB.membership : null; }
+  // With a real backend the plan comes only from the server (pairlum-sync.js
+  // fetches schema.sql's my_membership into PairlumSpace.plan()); the shared
+  // record's own "membership" is ignored there. Demo mode keeps its preview.
+  function serverPlanState() { return (window.PairlumSpace && window.PairlumSpace.plan && window.PairlumSpace.plan()) || { known: false, plan: null }; }
+  function membership() {
+    if (isRealBackend()) {
+      var sp = serverPlanState().plan;
+      return sp && sp.active && planById(sp.plan) ? { plan: sp.plan, since: isoFromDate(new Date(sp.startedAt)), endsAt: sp.endsAt } : null;
+    }
+    return DB.membership && planById(DB.membership.plan) ? DB.membership : null;
+  }
   function addYear(iso) {
     var p = String(iso).split("-");
     return isoFromDate(new Date(Number(p[0]) + 1, Number(p[1]) - 1, Number(p[2])));
   }
   // { ready, date, daysLeft, pct } for the Book plan, or null on any other plan.
   function bookStatus() {
+    if (isRealBackend()) {
+      // "Ready" is only ever the server's answer (one full year on the Book
+      // plan). The countdown and bar are just a display of its date.
+      var sp = serverPlanState().plan;
+      if (!sp || sp.plan !== "book" || !sp.bookEligibleAt) return null;
+      var at = new Date(sp.bookEligibleAt), from = new Date(sp.startedAt);
+      var daysLeftReal = Math.max(0, daysBetween(new Date(), at));
+      var totalReal = Math.max(1, daysBetween(from, at));
+      return { ready: !!sp.bookEligible, date: isoFromDate(at), daysLeft: sp.bookEligible ? 0 : Math.max(1, daysLeftReal),
+        pct: sp.bookEligible ? 100 : Math.max(0, Math.min(99, Math.round((totalReal - daysLeftReal) / totalReal * 100))), today: new Date() };
+    }
     var m = membership();
     if (!m || m.plan !== "book" || !validIso(m.since)) return null;
     var readyIso = addYear(m.since), today = new Date();
@@ -9833,20 +9858,32 @@
         '<p class="body-s">' + escapeHtml(pl.line || "") + '</p>' +
         '<p class="plan-price">' + (price ? '<b>' + escapeHtml(price) + '</b> / ' + escapeHtml(pl.period || "year") : '<span>Price announced before launch</span>') + '</p>' +
         '<ul>' + (pl.features || []).map(function (f) { return '<li>' + escapeHtml(f) + '</li>'; }).join("") + '</ul>' +
-        (isCurrent ? '<span class="plan-current-tag">Your plan</span>' : '<button type="button" class="btn-ghost" data-plan-choose="' + escapeHtml(pl.id) + '">Choose ' + escapeHtml(pl.short) + '</button>') +
+        (isCurrent ? '<span class="plan-current-tag">Your plan</span>'
+          : isRealBackend() ? '<span class="plan-current-tag">Opens soon</span>'
+            : '<button type="button" class="btn-ghost" data-plan-choose="' + escapeHtml(pl.id) + '">Choose ' + escapeHtml(pl.short) + '</button>') +
         '</article>';
     });
     html += '</div><p class="privacy-note">Billed yearly. No automatic renewal in this version. 7-day full refund window.</p></div>';
-    html += '<div class="overlay-section"><div class="overlay-section-head"><h4>Preview only</h4></div>' +
-      '<p class="body-s">This preview has no payments. Choosing a plan here only switches what you see, so you can look at each state — nothing is charged.</p>' +
-      (current ? '<div class="confirm-actions"><button type="button" class="btn-ghost" data-plan-choose="">See the free First Chapter state</button></div>' : "") +
-      '</div>';
+    if (isRealBackend()) {
+      // No payments yet: say so plainly, and never switch a plan without one.
+      html += '<div class="overlay-section"><div class="overlay-section-head"><h4>Membership opens soon</h4></div>' +
+        (serverPlanState().known === false
+          ? '<p class="body-s">We couldn\'t check your plan just now. It\'ll show here once Pairlum can reach the server again.</p>'
+          : '<p class="body-s">Payments aren\'t open yet, so plans can\'t be bought here today. Nothing is charged and nothing changes until they are. You\'ll keep everything you\'ve made.</p>') +
+        '</div>';
+    } else {
+      html += '<div class="overlay-section"><div class="overlay-section-head"><h4>Preview only</h4></div>' +
+        '<p class="body-s">This preview has no payments. Choosing a plan here only switches what you see, so you can look at each state — nothing is charged.</p>' +
+        (current ? '<div class="confirm-actions"><button type="button" class="btn-ghost" data-plan-choose="">See the free First Chapter state</button></div>' : "") +
+        '</div>';
+    }
     body.innerHTML = html;
     body.querySelectorAll("[data-plan-choose]").forEach(function (btn) {
       btn.addEventListener("click", function () { renderPlanConfirm(btn.getAttribute("data-plan-choose")); });
     });
   }
   function renderPlanConfirm(planId) {
+    if (isRealBackend()) { renderMembershipOverlay(); return; } // plans change only through a real payment
     var body = document.getElementById("membershipBody"), pl = planById(planId), price = planPrice(pl);
     body.innerHTML =
       '<div class="confirm-panel">' +
