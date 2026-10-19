@@ -195,8 +195,15 @@
   /* ------------------------------------------------------------------ */
   var SETTINGS_KEY = NS + "pairlum-space-settings-v1";
 
+  // With a real backend, nothing may borrow the demo couple's details (Aarav
+  // in Ahmedabad, Mira in Berlin, together since 2022, 612 moments): anything
+  // a real person hasn't told Pairlum yet stays blank or neutral instead.
+  function isRealBackend() { return !!(window.PairlumSpace && window.PairlumSpace.isConfigured()); }
+  function deviceTimeZone() {
+    try { var tz = Intl.DateTimeFormat().resolvedOptions().timeZone; new Intl.DateTimeFormat("en-US", { timeZone: tz }); return tz; } catch (e) { return "UTC"; }
+  }
   function defaultSpace() {
-    return {
+    var s = {
       spaceId: "sp_demo_001",
       currentUser: { id: "u_aarav", name: "Aarav", initial: "A", city: "Ahmedabad", timezone: "Asia/Kolkata", lat: 23.0225, lon: 72.5714, birthday: "1997-07-22" },
       partner: { id: "u_mira", name: "Mira", initial: "M", city: "Berlin", timezone: "Europe/Berlin", lat: 52.5200, lon: 13.4050, birthday: "1999-11-03" },
@@ -255,6 +262,22 @@
         { id: "dev_ipad", name: "Pairlum on iPad", lastActive: "2 weeks ago", current: false }
       ]
     };
+    if (isRealBackend()) {
+      // Time zones must stay valid (every clock formats with them): until a
+      // person's own is known, this device's stands in. applyProfiles() and
+      // recordMyTimeZone() fill in the real ones.
+      var tz = deviceTimeZone();
+      s.spaceId = null;
+      s.currentUser = { id: "u_aarav", name: "You", initial: "Y", city: "", timezone: tz, lat: null, lon: null, birthday: "" };
+      s.partner = { id: "u_mira", name: "Your partner", initial: "Y", city: "", timezone: tz, lat: null, lon: null, birthday: "" };
+      s.relationshipStart = isoFromDate(new Date());
+      s.reunionDate = null;
+      s.totalSharedMoments = 0;
+      s.pairing = { status: "not_started", inviteCode: null, inviteSentAt: null, joinedAt: null };
+      s.hasImportedPast = false;
+      s.devices = [s.devices[0]];
+    }
+    return s;
   }
 
   /* Settings are private to one person on one device, so each partner has
@@ -393,7 +416,7 @@
      keeps its own exact time and the city it was shared from. */
   var SPACE_TZ_DEFAULT = "Asia/Kolkata";
   function spaceTz() {
-    var tz = (typeof DB !== "undefined" && DB && DB.spaceTz) || SPACE_TZ_DEFAULT;
+    var tz = (typeof DB !== "undefined" && DB && DB.spaceTz) || (isRealBackend() ? deviceTimeZone() : SPACE_TZ_DEFAULT);
     try { new Intl.DateTimeFormat("en-US", { timeZone: tz }); return tz; } catch (e) { return SPACE_TZ_DEFAULT; }
   }
   function tzParts(ts, tz) {
@@ -601,6 +624,7 @@
     applyProfiles();
     // the running total of shared moments, when the space carries one
     if (DB.stats && DB.stats.totalMoments > 0) SPACE.totalSharedMoments = DB.stats.totalMoments;
+    else if (isRealBackend()) SPACE.totalSharedMoments = DB.moments.length; // a real count, not the demo's 612
     SPACE.moments = DB.moments.map(function (m) {
       var o = {}; Object.keys(m).forEach(function (k) { o[k] = m[k]; });
       o.who = rel(m.by); return o;
@@ -641,6 +665,8 @@
   }
 
   var SPACE = shallowMerge(defaultSpace(), loadPersistedSettings());
+  // Older builds saved the demo's sample devices into real people's settings.
+  if (isRealBackend()) SPACE.devices = defaultSpace().devices;
   if (ME === "u_mira") { var swapUser = SPACE.currentUser; SPACE.currentUser = SPACE.partner; SPACE.partner = swapUser; }
   SPACE.needYou = NEED_YOU;
   var DB = readShared();
@@ -913,6 +939,24 @@
       } catch (e) { cb(e); }
     });
   }
+  // Local-only read for pairlum-sync.js's upload retries: a file still waiting
+  // to upload is, by definition, only on this device — no demo media, no
+  // cloud fallback. cb(blob), cb(null) = not here any more, cb(undefined) =
+  // couldn't read it just now (keep it queued).
+  if (window.PairlumMediaBridge) window.PairlumMediaBridge.readLocal = function (id, cb) {
+    withMediaDB(function (err, db) {
+      if (err) return cb(undefined);
+      try {
+        var store = db.transaction(IDB_STORE, "readonly").objectStore(IDB_STORE), keys = mediaKeys(id), i = 0;
+        (function step() {
+          if (i >= keys.length) return cb(null);
+          var req = store.get(keys[i++]);
+          req.onsuccess = function () { if (req.result) cb(req.result); else step(); };
+          req.onerror = function () { cb(undefined); };
+        })();
+      } catch (e) { cb(undefined); }
+    });
+  };
   // Not on this device: the partner's device may have captured it. Ask the
   // cloud bridge (see pairlum-sync.js); cache a hit locally so this only
   // happens once per file per device.
@@ -1030,7 +1074,9 @@
   function renderSpaceBindings() {
     var cu = SPACE.currentUser, p = SPACE.partner;
 
-    setText("brandCities", cu.city + " ⟷ " + p.city);
+    // Cities are only shown once both are known — a lone "Pune ⟷ " reads as broken.
+    var bothCities = !!(cu.city && p.city);
+    setText("brandCities", bothCities ? cu.city + " ⟷ " + p.city : "");
     setText("avatarA", cu.initial);
     setText("avatarB", p.initial);
     setText("presenceAvatarA", cu.initial);
@@ -1038,7 +1084,7 @@
     setText("presenceNameB", p.name);
     setText("presenceLocA", cu.city);
     setText("presenceLocB", p.city);
-    setText("presenceDistance", distanceText() ? distanceText() + " apart" : "Two cities apart");
+    setText("presenceDistance", distanceText() ? distanceText() + " apart" : bothCities ? "Two cities apart" : "Add your cities in Profile");
     setText("cityALabel", cu.city);
     setText("cityBLabel", p.city);
     setText("needPrimaryAvatar", p.initial);
@@ -1053,7 +1099,7 @@
 
     var startDate = new Date(SPACE.relationshipStart);
     var startLabel = new Intl.DateTimeFormat("en-US", { day: "numeric", month: "long", year: "numeric" }).format(startDate);
-    setText("usProfileMeta", cu.city + " · " + p.city + " · together since " + startLabel);
+    setText("usProfileMeta", (bothCities ? cu.city + " · " + p.city + " · " : "") + "together since " + startLabel);
 
     var years = (Date.now() - startDate.getTime()) / (365.25 * 86400000);
     setText("statYears", String(Math.floor(years)));
@@ -4841,7 +4887,7 @@
       n.textContent = who + " · " + agoText(ts);
     });
     var live = document.getElementById("parallelLiveText");
-    if (live) live.textContent = SPACE.currentUser.city + " " + a + "  ·  " + SPACE.partner.city + " " + b;
+    if (live) live.textContent = (SPACE.currentUser.city ? SPACE.currentUser.city + " " : "") + a + "  ·  " + (SPACE.partner.city ? SPACE.partner.city + " " : "") + b;
   }
   function openParallelCapture() {
     if (!isPaired()) {
@@ -7293,7 +7339,14 @@
     if (e.key !== PAIRING_KEY || !e.newValue) return;
     var next = readJsonKey(PAIRING_KEY);
     if (!next || typeof next !== "object") return;
+    var wasJoined = SPACE.pairing && SPACE.pairing.status === "joined";
     SPACE.pairing = next;
+    if (!wasJoined && next.status === "joined" && window.PairlumSpace && window.PairlumSpace.isConfigured()) {
+      // The partner just accepted this account's invite (pairlum-sync.js's
+      // realtime handler). Their real name arrives a moment later with the
+      // shared record, so this stays name-free.
+      notify({ type: "us", text: "Your partner joined your Pairlum. Shared Day is ready.", view: "home" });
+    }
     if (!isPaired()) liveShutdown("The space was paused, so live sound stopped. Your microphone is off.");
     renderSpaceBindings();
     applyPairingGate();
@@ -7480,15 +7533,27 @@
     notice.hidden = paired;
 
     if (!paired) {
-      var p = SPACE.partner;
+      var p = SPACE.partner, st = SPACE.pairing.status;
+      // Before anyone has joined, the real partner's name isn't known yet.
+      var who = (window.PairlumSpace && window.PairlumSpace.isConfigured() && st !== "left") ? "your partner" : p.name;
       var copy = {
-        not_started: "Invite " + p.name + " to bring Shared Day to life — nothing shows here until you both explicitly join the same space.",
-        invite_sent: "Waiting on " + p.name + " to accept your invite before Shared Day can start.",
-        waiting: "Waiting on " + p.name + " to accept your invite before Shared Day can start.",
-        expired: "Your invite to " + p.name + " expired. Send a new one to bring Shared Day back.",
+        not_started: "Invite " + who + " to bring Shared Day to life — nothing shows here until you both join the same space.",
+        invite_sent: "Waiting on " + who + " to accept your invite before Shared Day can start.",
+        waiting: "Waiting on " + who + " to accept your invite before Shared Day can start.",
+        invite_ready: "Your invite link is ready. Shared Day starts the moment " + who + " opens it and taps Join.",
+        invite_expired: "Your invite link expired. Make a new one to bring Shared Day to life.",
+        invite_offer: (SPACE.pairing.inviteFromName || "Your partner") + " invited you to their Pairlum. Open the invitation to join.",
+        invite_problem: "There's a problem with the invite link you opened. Open it to see what to do next.",
+        expired: "Your invite to " + who + " expired. Send a new one to bring Shared Day back.",
         left: "You stepped away from this Pairlum. Nothing here was lost — rejoin whenever you're ready."
-      }[SPACE.pairing.status] || ("Connect with " + p.name + " to bring Shared Day back to life.");
+      }[st] || ("Connect with " + who + " to bring Shared Day back to life.");
       if (noticeText) noticeText.textContent = copy;
+      // One button, labelled for what it actually leads to.
+      var cta = notice.querySelector("[data-action='open-pairing']");
+      if (cta) cta.textContent = ({
+        not_started: "Invite your partner →", invite_ready: "Share your invite →", invite_expired: "Make a new link →",
+        invite_offer: "See invitation →", invite_problem: "See what happened →", left: "Rejoin →"
+      })[st] || "Reconnect →";
     }
 
     if (fab) fab.style.display = paired ? "" : "none";
@@ -7515,50 +7580,102 @@
     // "synchronization". This is the whole story in three lines:
     // Invite Mira to your Pairlum → Waiting for Mira → Mira is here.
     var isReal = window.PairlumSpace && window.PairlumSpace.isConfigured();
+    // A link can run out while this screen is open: show it as expired then
+    // and there, rather than offering a link that will no longer work.
+    if (status === "invite_ready" && SPACE.pairing.inviteExpiresAt && Date.parse(SPACE.pairing.inviteExpiresAt) <= Date.now()) status = "invite_expired";
     var badge = {
       not_started: '<span class="pairing-status-badge pairing-status-badge--none">Not started</span>',
       invite_sent: '<span class="pairing-status-badge pairing-status-badge--waiting">Waiting for ' + escapeHtml(p.name) + '</span>',
       waiting: '<span class="pairing-status-badge pairing-status-badge--waiting">Waiting for ' + escapeHtml(p.name) + '</span>',
-      invite_ready: '<span class="pairing-status-badge pairing-status-badge--waiting">Link ready</span>',
-      invite_offer: '<span class="pairing-status-badge pairing-status-badge--waiting">Invite received</span>',
+      invite_ready: '<span class="pairing-status-badge pairing-status-badge--waiting">Waiting for your partner</span>',
+      invite_expired: '<span class="pairing-status-badge pairing-status-badge--expired">Invite expired</span>',
+      invite_offer: '<span class="pairing-status-badge pairing-status-badge--waiting">You’re invited</span>',
+      invite_problem: '<span class="pairing-status-badge pairing-status-badge--expired">Invite can’t be used</span>',
       expired: '<span class="pairing-status-badge pairing-status-badge--expired">Invite expired</span>',
+      left: '',
       joined: '<span class="pairing-status-badge pairing-status-badge--joined">' + escapeHtml(p.name) + ' is here — connected</span>'
-    }[status];
+    }[status] || "";
 
     html += '<div class="pairing-state">' + badge;
 
+    // Got a link but opened Pairlum some other way? Paste it here — it goes
+    // through the same "Join our Pairlum?" screen as opening the link itself.
+    var pasteInviteHtml =
+      '<p class="body-s" style="margin-top:16px"><button type="button" class="ambient-link" id="pairingPasteBtn">Got an invite link from your partner?</button></p>' +
+      '<div id="pairingPastePanel" hidden>' +
+      '<label class="field"><span class="field-label">Paste the invite link</span><input type="text" id="pairingPasteInput" class="confirm-input" placeholder="https://…/auth.html?invite=…" autocomplete="off" spellcheck="false"></label>' +
+      '<button class="btn-primary" id="pairingPasteGo" type="button" style="width:100%">Continue →</button>' +
+      '<p class="auth-note" id="pairingPasteNote" style="margin-top:8px"></p>' +
+      '</div>';
+    var expiresLabel = function (iso) {
+      var t = Date.parse(iso || "");
+      return isNaN(t) ? "" : new Intl.DateTimeFormat("en-US", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(new Date(t));
+    };
+
     if (status === "not_started" && isReal) {
       html +=
-        '<h3 class="disp-3" style="margin-top:10px">Start your Pairlum</h3>' +
-        '<p class="body-m">Create a link and send it to your partner any way you like — text, chat, however. The moment they open it and confirm, your shared space begins.</p>' +
-        '<button class="btn-primary" id="pairingCreateInviteBtn" type="button" style="width:100%;margin-top:6px">Create invite link →</button>' +
+        '<h3 class="disp-3" style="margin-top:10px">Invite your partner</h3>' +
+        '<p class="body-m">You’ll get a private link to send them any way you like — a message, a chat, an email. When they open it and tap Join, your shared space begins.</p>' +
+        '<button class="btn-primary" id="pairingCreateInviteBtn" type="button" style="width:100%;margin-top:6px">Invite your partner →</button>' +
         '<p class="auth-note" id="pairingCreateNote" style="margin-top:8px"></p>' +
-        '<p class="body-s" style="margin-top:14px"><button type="button" class="ambient-link" id="pairingHaveCodeBtn">Already have an invite code?</button></p>' +
-        '<div id="pairingCodePanel" hidden>' +
-        '<label class="field"><span class="field-label">Invite code</span><input type="text" id="pairingCodeInput" class="confirm-input" placeholder="ABCD1234" autocomplete="off" maxlength="8" style="text-transform:uppercase"></label>' +
-        '<button class="btn-primary" id="pairingRedeemCodeBtn" type="button" style="width:100%">Join →</button>' +
-        '<p class="auth-note" id="pairingCodeNote" style="margin-top:8px"></p>' +
-        '</div>';
+        pasteInviteHtml;
     } else if (status === "not_started") {
       html +=
         '<h3 class="disp-3" style="margin-top:10px">Invite ' + escapeHtml(p.name) + ' to your Pairlum</h3>' +
         '<p class="body-m">This is a private space just for the two of you. Nothing shows here until ' + escapeHtml(p.name) + ' joins too.</p>' +
         '<button class="btn-primary" id="pairingCreateBtn" type="button" style="width:100%;margin-top:6px">Invite ' + escapeHtml(p.name) + ' →</button>';
+    } else if (status === "invite_ready" && SPACE.pairing.inviteToken) {
+      var inviteLink = location.origin + "/auth.html?invite=" + encodeURIComponent(SPACE.pairing.inviteToken);
+      var until = expiresLabel(SPACE.pairing.inviteExpiresAt);
+      html +=
+        '<h3 class="disp-3" style="margin-top:10px">Send this link to your partner</h3>' +
+        '<p class="body-m">It works once, for one person. Anyone who opens it could join, so send it only to them. Your Shared Day starts the moment they tap Join.</p>' +
+        '<div class="invite-code-box"><span class="code" id="pairingInviteLink" style="font-size:.8rem;word-break:break-all;user-select:all">' + escapeHtml(inviteLink) + '</span><button type="button" id="pairingCopyBtn">Copy</button></div>' +
+        '<button class="btn-primary" id="pairingShareBtn" type="button" style="width:100%;margin-top:10px">Share invite link →</button>' +
+        '<p class="auth-note" id="pairingShareNote" style="margin-top:8px">' + (until ? "Works until " + escapeHtml(until) + "." : "") + ' This screen updates on its own when they join.</p>' +
+        '<div class="confirm-actions"><button class="btn-ghost" id="pairingCancelInviteBtn" type="button">Cancel invite</button></div>';
     } else if (status === "invite_ready") {
-      var inviteLink = location.origin + "/auth.html?invite=" + encodeURIComponent(SPACE.pairing.inviteCode || "");
+      // Waiting, but this device doesn't have the link (it was made on
+      // another device, or this browser's storage was cleared) — the
+      // database keeps only a fingerprint of it, so it can't be shown again.
       html +=
-        '<h3 class="disp-3" style="margin-top:10px">Share this link</h3>' +
-        '<p class="body-m">Anyone who opens it can join this space, so share it only with the person you mean to pair with. Your Shared Day starts the moment they confirm.</p>' +
-        '<div class="invite-code-box"><span class="code" id="pairingInviteLink" style="font-size:.8rem;word-break:break-all">' + escapeHtml(inviteLink) + '</span><button type="button" id="pairingCopyBtn">Copy</button></div>' +
-        '<button class="btn-ghost" id="pairingShareBtn" type="button" style="width:100%;margin-top:8px">Share link →</button>' +
-        '<p class="body-s" style="margin-top:10px">Or share the code directly: <strong>' + escapeHtml(SPACE.pairing.inviteCode || "") + '</strong></p>' +
-        '<div class="confirm-actions"><button class="btn-danger" id="pairingRevokeBtn" type="button">Revoke link</button></div>';
+        '<h3 class="disp-3" style="margin-top:10px">Your invite is waiting</h3>' +
+        '<p class="body-m">Your partner can still use the link you sent. To see it again here, make a new one — the old link will stop working.</p>' +
+        '<button class="btn-primary" id="pairingCreateInviteBtn" type="button" style="width:100%;margin-top:6px">Make a new link →</button>' +
+        '<p class="auth-note" id="pairingCreateNote" style="margin-top:8px"></p>' +
+        '<div class="confirm-actions"><button class="btn-ghost" id="pairingCancelInviteBtn" type="button">Cancel invite</button></div>';
+    } else if (status === "invite_expired") {
+      html +=
+        '<h3 class="disp-3" style="margin-top:10px">Your invite expired</h3>' +
+        '<p class="body-m">Invite links only work for a little while, to keep your space private. Make a new one and send it again.</p>' +
+        '<button class="btn-primary" id="pairingCreateInviteBtn" type="button" style="width:100%;margin-top:6px">Make a new link →</button>' +
+        '<p class="auth-note" id="pairingCreateNote" style="margin-top:8px"></p>' +
+        pasteInviteHtml;
     } else if (status === "invite_offer") {
+      var from = SPACE.pairing.inviteFromName || "your partner";
       html +=
-        '<h3 class="disp-3" style="margin-top:10px">Join ' + escapeHtml(SPACE.pairing.inviteFromName || "their") + '’s Pairlum?</h3>' +
-        '<p class="body-m">You’re about to pair your account with theirs. From then on, Shared Day, Our Story, Letters and everything else here is shared only between the two of you.</p>' +
+        '<h3 class="disp-3" style="margin-top:10px">' + escapeHtml(from) + ' invited you to their Pairlum</h3>' +
+        '<p class="body-m">When you join, the two of you share one private space: Shared Day, Our Story, Letters and everything else here, seen only by you two.</p>' +
         '<p class="auth-note" id="pairingJoinNote" style="margin-top:8px"></p>' +
-        '<div class="confirm-actions"><button class="btn-ghost" id="pairingDeclineInviteBtn" type="button">Not now</button><button class="btn-primary" id="pairingJoinInviteBtn" type="button">Join →</button></div>';
+        '<div class="confirm-actions"><button class="btn-ghost" id="pairingDeclineInviteBtn" type="button">Not now</button><button class="btn-primary" id="pairingJoinInviteBtn" type="button">Join our Pairlum →</button></div>';
+    } else if (status === "invite_problem") {
+      var problem = SPACE.pairing.inviteProblem;
+      var problemCopy = {
+        used: "This invite has already been used.",
+        cancelled: "This invite was cancelled. Ask your partner to send you a new link.",
+        expired: "This invite has expired. Ask your partner to send you a new link.",
+        own: "This is your own invite link — send it to your partner instead.",
+        full: "That Pairlum already has two people in it.",
+        network: "We couldn’t check your invite just now. Check your connection and try again."
+      }[problem] || "This invite link isn’t valid. Ask your partner to send it again.";
+      html +=
+        '<h3 class="disp-3" style="margin-top:10px">' + (problem === "network" ? "Couldn’t check your invite" : "This invite can’t be used") + '</h3>' +
+        '<p class="body-m">' + escapeHtml(problemCopy) + '</p>' +
+        '<div class="confirm-actions">' +
+        (problem === "network"
+          ? '<button class="btn-ghost" id="pairingProblemOkBtn" type="button">Forget this link</button><button class="btn-primary" id="pairingProblemRetryBtn" type="button">Try again</button>'
+          : '<button class="btn-primary" id="pairingProblemOkBtn" type="button">OK</button>') +
+        '</div>';
     } else if (status === "invite_sent" || status === "waiting") {
       html +=
         '<h3 class="disp-3" style="margin-top:10px">Waiting for ' + escapeHtml(p.name) + '</h3>' +
@@ -7617,67 +7734,72 @@
     var signOutBtn = document.getElementById("pairingSignOutBtn");
     if (signOutBtn) signOutBtn.addEventListener("click", function () { window.PairlumSpace.signOut(); });
 
-    // ---- real mode: create an invite link, or redeem one typed by hand ----
+    // ---- real mode: make an invite link (also "make a new link") ----
     var createInviteBtn = document.getElementById("pairingCreateInviteBtn");
     if (createInviteBtn) createInviteBtn.addEventListener("click", function () {
       var note = document.getElementById("pairingCreateNote");
-      createInviteBtn.disabled = true; if (note) note.textContent = "Creating your link…";
+      createInviteBtn.disabled = true; if (note) note.textContent = "Making your link…";
       window.PairlumSpace.createInvite().then(function () {
         renderPairingOverlay();
       }, function (err) {
         createInviteBtn.disabled = false;
-        if (note) note.textContent = err && err.message ? err.message : "Couldn't create a link. Try again.";
+        if (note) note.textContent = err && err.message ? err.message : "Couldn't make a link. Try again.";
       });
     });
-    var haveCodeBtn = document.getElementById("pairingHaveCodeBtn");
-    if (haveCodeBtn) haveCodeBtn.addEventListener("click", function () {
-      var panel = document.getElementById("pairingCodePanel");
+    // ---- real mode: a link pasted in by hand ----
+    var pasteBtn = document.getElementById("pairingPasteBtn");
+    if (pasteBtn) pasteBtn.addEventListener("click", function () {
+      var panel = document.getElementById("pairingPastePanel");
       panel.hidden = !panel.hidden;
-      if (!panel.hidden) document.getElementById("pairingCodeInput").focus();
+      if (!panel.hidden) document.getElementById("pairingPasteInput").focus();
     });
-    var redeemCodeBtn = document.getElementById("pairingRedeemCodeBtn");
-    if (redeemCodeBtn) redeemCodeBtn.addEventListener("click", function () {
-      var note = document.getElementById("pairingCodeNote");
-      var code = (document.getElementById("pairingCodeInput").value || "").trim();
-      if (!code) { note.textContent = "Enter the invite code."; return; }
-      redeemCodeBtn.disabled = true; note.textContent = "Joining…";
-      window.PairlumSpace.acceptInviteOffer(code).catch(function (err) {
-        redeemCodeBtn.disabled = false;
-        note.textContent = err && err.message ? err.message : "That code didn't work. Check it and try again.";
-      });
+    var pasteGo = document.getElementById("pairingPasteGo");
+    if (pasteGo) pasteGo.addEventListener("click", function () {
+      var note = document.getElementById("pairingPasteNote");
+      if (!window.PairlumSpace.openInvite(document.getElementById("pairingPasteInput").value)) {
+        note.textContent = "That doesn't look like a Pairlum invite link. Copy the whole link your partner sent and try again.";
+        return;
+      }
+      pasteGo.disabled = true; note.textContent = "Checking your invite…";
     });
 
-    // ---- real mode: my own ready-to-share link ----
+    // ---- the link itself: copy, share (demo mode reuses the copy button) ----
     var inviteLinkEl = document.getElementById("pairingInviteLink");
     var copyBtn = document.getElementById("pairingCopyBtn");
-    if (copyBtn) copyBtn.addEventListener("click", function () {
-      // invite_ready (real mode, inviteLinkEl present) copies the link;
-      // invite_sent/waiting (demo mode) copies a code-only message instead.
+    // Last resort when the browser won't write to the clipboard: select the
+    // link on screen so it can be copied by hand.
+    var selectInviteLink = function () {
+      if (!inviteLinkEl || !window.getSelection) return false;
+      try { var r = document.createRange(); r.selectNodeContents(inviteLinkEl); var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); return true; } catch (e) { return false; }
+    };
+    var copyInvite = function () {
+      // invite_ready (real mode) copies the link; invite_sent/waiting (demo
+      // mode) copies a code-only message instead.
       var text = inviteLinkEl ? inviteLinkEl.textContent : ("Join me on Pairlum — code " + (SPACE.pairing.inviteCode || ""));
+      var manual = function () { showToast(selectInviteLink() ? "Couldn't copy automatically — the link is selected, so press Ctrl+C (or long-press and Copy)." : text); };
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(function () { showToast("Copied."); }, function () { showToast("Couldn't copy — it's " + text); });
-      } else {
-        showToast(text);
-      }
-    });
+        navigator.clipboard.writeText(text).then(function () { showToast("Invite link copied."); }, manual);
+      } else manual();
+    };
+    if (copyBtn) copyBtn.addEventListener("click", copyInvite);
     var shareBtn = document.getElementById("pairingShareBtn");
     if (shareBtn) shareBtn.addEventListener("click", function () {
       var link = inviteLinkEl ? inviteLinkEl.textContent : "";
-      if (navigator.share) {
-        navigator.share({ title: "Join me on Pairlum", url: link }).catch(function () { });
-      } else if (copyBtn) {
-        copyBtn.click();
-      }
+      if (!navigator.share) { copyInvite(); return; }
+      navigator.share({ title: "Join me on Pairlum", text: "Here’s my invite to our Pairlum:", url: link }).catch(function (err) {
+        if (err && err.name === "AbortError") return; // they closed the share sheet
+        copyInvite();
+      });
     });
-    var revokeBtn = document.getElementById("pairingRevokeBtn");
-    if (revokeBtn) revokeBtn.addEventListener("click", function () {
-      revokeBtn.disabled = true;
-      window.PairlumSpace.revokeInvite().then(function () {
+    var cancelInviteBtn = document.getElementById("pairingCancelInviteBtn");
+    if (cancelInviteBtn) cancelInviteBtn.addEventListener("click", function () {
+      cancelInviteBtn.disabled = true;
+      window.PairlumSpace.cancelInvite().then(function () {
         renderPairingOverlay();
-        showToast("Link revoked — it no longer works.");
+        showToast("Invite cancelled — that link no longer works.");
       }, function (err) {
-        revokeBtn.disabled = false;
-        showToast(err && err.message ? err.message : "Couldn't revoke that link. Try again.", true);
+        cancelInviteBtn.disabled = false;
+        showToast(err && err.message ? err.message : "Couldn't cancel the invite. Try again.", true);
       });
     });
 
@@ -7685,19 +7807,20 @@
     var joinInviteBtn = document.getElementById("pairingJoinInviteBtn");
     if (joinInviteBtn) joinInviteBtn.addEventListener("click", function () {
       var note = document.getElementById("pairingJoinNote");
-      joinInviteBtn.disabled = true; if (note) note.textContent = "Joining…";
+      var decline = document.getElementById("pairingDeclineInviteBtn");
+      joinInviteBtn.disabled = true; if (decline) decline.disabled = true;
+      if (note) note.textContent = "Joining…";
       window.PairlumSpace.acceptInviteOffer().catch(function (err) {
-        joinInviteBtn.disabled = false;
-        if (note) note.textContent = err && err.message ? err.message : "Couldn't join. The link may have expired — ask for a new one.";
+        joinInviteBtn.disabled = false; if (decline) decline.disabled = false;
+        if (note) note.textContent = err && err.message ? err.message : "Couldn't join. Ask your partner for a new link.";
       });
     });
     var declineInviteBtn = document.getElementById("pairingDeclineInviteBtn");
-    if (declineInviteBtn) declineInviteBtn.addEventListener("click", function () {
-      window.PairlumSpace.declineInviteOffer();
-      renderPairingOverlay();
-      renderSpaceBindings();
-      applyPairingGate();
-    });
+    if (declineInviteBtn) declineInviteBtn.addEventListener("click", function () { window.PairlumSpace.declineInviteOffer(); });
+    var problemOkBtn = document.getElementById("pairingProblemOkBtn");
+    if (problemOkBtn) problemOkBtn.addEventListener("click", function () { window.PairlumSpace.declineInviteOffer(); });
+    var problemRetryBtn = document.getElementById("pairingProblemRetryBtn");
+    if (problemRetryBtn) problemRetryBtn.addEventListener("click", function () { window.PairlumSpace.retryInviteCheck(); });
     var resendBtn = document.getElementById("pairingResendBtn");
     if (resendBtn) resendBtn.addEventListener("click", function () {
       SPACE.pairing.status = "waiting";
@@ -7725,7 +7848,7 @@
       renderPairingOverlay();
       renderSpaceBindings();
       applyPairingGate();
-      showToast(SPACE.partner.name + " joined your space — Shared Day is active.");
+      showToast("Demo only: pretending " + SPACE.partner.name + " joined. No real account was connected.");
     });
     var resendExpiredBtn = document.getElementById("pairingResendExpiredBtn");
     if (resendExpiredBtn) resendExpiredBtn.addEventListener("click", function () {
@@ -9170,8 +9293,11 @@
       '<div class="confirm-panel">' +
       '<button class="overlay-back" type="button" id="deleteBack">← Back</button>' +
       '<h4>Delete your account</h4>' +
-      '<p class="body-m">This is permanent. In the full product, this removes your access entirely and lets ' + escapeHtml(SPACE.partner.name) + ' know your account was deleted; your shared history\'s fate follows the same rules as disconnecting.</p>' +
-      '<p class="body-s">This prototype has no server. Confirming removes what is yours from this device: your profile, the moments, notes, letters, memories and plans you added, your recordings, and this device\'s settings. Everything ' + escapeHtml(SPACE.partner.name) + ' added, including their photos and voice notes, stays.</p>' +
+      (isRealBackend()
+        ? '<p class="body-m">This is permanent and can\'t be undone. Your login is deleted and you\'re signed out. Your pairing ends for both of you, the same as disconnecting.</p>' +
+          '<p class="body-s">Removed: your profile, and the moments, notes, letters, memories and plans you added, with your photos, clips and recordings. Everything ' + escapeHtml(SPACE.partner.name) + ' added, including their photos and voice notes, stays with them.</p>'
+        : '<p class="body-m">This is permanent. In the full product, this removes your access entirely and lets ' + escapeHtml(SPACE.partner.name) + ' know your account was deleted; your shared history\'s fate follows the same rules as disconnecting.</p>' +
+          '<p class="body-s">This demo has no server. Confirming removes what is yours from this device: your profile, the moments, notes, letters, memories and plans you added, your recordings, and this device\'s settings. Everything ' + escapeHtml(SPACE.partner.name) + ' added, including their photos and voice notes, stays.</p>') +
       '<label class="body-s" style="display:block;margin-top:14px">Type <b>DELETE</b> to confirm</label>' +
       '<input type="text" class="confirm-input" id="deleteConfirmInput" autocomplete="off">' +
       '<div class="confirm-actions">' +
@@ -9230,6 +9356,17 @@
       var finish = function () {
         [userSettingsKey(), QUEUE_META_KEY, NEED_REQUESTS_KEY, NOTES_KEY, LETTERS_KEY, DATE_REMINDER_DISMISSED_KEY, MOOD_KEY, HEARTS_KEY,
           FEEL_KEY, SOMEDAY_KEY, INBOX_KEY, REMINDED_KEY, LETTER_DRAFT_KEY, DQ_DRAFT_KEY].forEach(function (k) { try { localStorage.removeItem(k); } catch (e) { } });
+        if (isRealBackend() && window.PairlumSpace.deleteAccount) {
+          // The server half: storage, the shared record, then the login
+          // itself (see pairlum-sync.js). It leaves this page on success.
+          confirmBtn.textContent = "Deleting your account…";
+          window.PairlumSpace.deleteAccount(mineMedia).catch(function (err) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = "Delete my account";
+            showToast(err && err.message ? err.message : "Your account couldn't be deleted just now. Try again.", true);
+          });
+          return;
+        }
         closeOverlay("privacyOverlay");
         showToast(failedFiles
           ? "Your account and everything you added were removed. " + failedFiles + " of your files could not be erased just now; Pairlum will try again when it next opens. " + SPACE.partner.name + "'s things are untouched."
@@ -9395,9 +9532,14 @@
   // Who each of you is: the starting demo couple, with whatever you've each
   // changed laid over the top. Runs every time the shared record is read.
   function applyProfiles() {
-    var base = defaultSpace();
+    var base = defaultSpace(), real = isRealBackend();
     var mine = ME === "u_aarav" ? base.currentUser : base.partner;
     var theirs = ME === "u_aarav" ? base.partner : base.currentUser;
+    if (real) {
+      // The neutral placeholders belong to the viewer, not to a fixed id.
+      mine = copyObj(base.currentUser); mine.id = ME;
+      theirs = copyObj(base.partner); theirs.id = THEM;
+    }
     var fill = function (start, saved) {
       var o = copyObj(start);
       Object.keys(saved || {}).forEach(function (k) { o[k] = saved[k]; });
@@ -9410,7 +9552,23 @@
     SPACE.partner.realName = SPACE.partner.name;
     var nick = String((SPACE.custom && SPACE.custom.nick) || "").trim();
     if (nick) SPACE.partner.name = nick;
-    SPACE.relationshipStart = validIso(DB.relStart) ? DB.relStart : base.relationshipStart;
+    SPACE.relationshipStart = validIso(DB.relStart) ? DB.relStart : (real ? connectedSince() : base.relationshipStart);
+  }
+  // A real couple who hasn't set "Together since" yet: count from the day
+  // they connected on Pairlum (or today, before that) — never the demo's date.
+  function connectedSince() {
+    var t = SPACE.pairing && Date.parse(SPACE.pairing.joinedAt || "");
+    return isoFromDate(t ? new Date(t) : new Date());
+  }
+  // Each person's real time zone, taken from their own device the first time
+  // they open Pairlum (they can change it in Profile). Until then the other
+  // partner's clock would only be a guess.
+  function recordMyTimeZone() {
+    if (!isRealBackend() || RECOVERY) return;
+    var saved = DB.profiles && DB.profiles[ME];
+    if (saved && saved.timezone) return;
+    var tz = deviceTimeZone();
+    if (mutate(function (db) { db.profiles[ME] = Object.assign({}, db.profiles[ME] || {}, { timezone: tz }); }, { evenIfPaused: true })) refreshEverything();
   }
   // After a change that touches names, cities or dates: repaint everything.
   function refreshEverything() {
@@ -11301,6 +11459,22 @@
     window.setInterval(tickClocks, 30000);
 
     buildWaveform(document.getElementById("needWaveform"), 40);
+
+    recordMyTimeZone();
+
+    // Arrived through a partner's invite link: show the invitation (or what's
+    // wrong with it) straight away, instead of a "paused" Home with a button
+    // to go looking for it.
+    if (SPACE.pairing.status === "invite_offer" || SPACE.pairing.status === "invite_problem") {
+      renderPairingOverlay(); openOverlay("pairingOverlay");
+    }
+    // A link opened by someone who is already connected (see pairlum-sync.js).
+    try {
+      if (sessionStorage.getItem(NS + "pairlum-invite-notice") === "already_paired") {
+        sessionStorage.removeItem(NS + "pairlum-invite-notice");
+        showToast("You're already connected in a Pairlum, so that invite link wasn't used.");
+      }
+    } catch (e) { }
   });
 
 })();

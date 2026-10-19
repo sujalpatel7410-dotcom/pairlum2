@@ -75,52 +75,69 @@ window.PairlumBackend = (function(){
       liveLog: [], ops: [], mediaGens: [],
       membership: { plan: null, since: null },
       rev: 0, epoch: 0,
-      spaceTz: "Asia/Kolkata"
+      // When "today" turns over for both of you — the creator's own time
+      // zone to start with (changeable in Profile), not a fixed demo one.
+      spaceTz: deviceTimeZone()
     };
+  }
+  function deviceTimeZone(){
+    try{ var tz = Intl.DateTimeFormat().resolvedOptions().timeZone; new Intl.DateTimeFormat("en-US", { timeZone: tz }); return tz; }catch(e){ return "UTC"; }
   }
   function createSpace(){
     if(!configured) return need();
     return client.rpc("create_space", { seed: emptySpaceSeed() }).then(function(r){ if(r.error) throw r.error; return r.data; });
   }
-  // Creates (or re-fetches) a shareable invite for spaceId — see
-  // schema.sql's create_space_invite. Returns the invite row (its `code` is
-  // what the link/fallback-entry field uses).
-  function createInvite(spaceId){
-    if(!configured) return need();
-    return client.rpc("create_space_invite", { target_space: spaceId }).then(function(r){ if(r.error) throw r.error; return r.data; });
+  // Turns a Supabase/network error into something a person can act on. The
+  // invite functions raise their own plain-language messages (Postgres code
+  // P0001); a failed request has no code and a fetch-style message.
+  function friendlyError(err){
+    var msg = (err && err.message) || "";
+    if(err && err.code === "P0001" && msg) return new Error(msg);
+    if(!msg || /fetch|network|load failed|timeout/i.test(msg)) return new Error("Couldn't reach Pairlum. Check your connection and try again.");
+    return new Error(msg);
   }
-  function revokeInvite(code){
-    if(!configured) return need();
-    return client.rpc("revoke_space_invite", { invite_code: code }).then(function(r){ if(r.error) throw r.error; });
+  function rpc(name, args){
+    return client.rpc(name, args).then(function(r){ if(r.error) throw friendlyError(r.error); return r.data; }, function(e){ throw friendlyError(e); });
   }
-  // My own still-pending invite for spaceId, if I made one — restores the
-  // "here's your link" screen across a reload. A direct table read (not an
-  // RPC): schema.sql's select policy on space_invites already lets the
-  // creator read their own row, same as space_members/spaces elsewhere here.
+
+  // ---- invite links (see schema.sql's pairing_invites) -----------------------
+  // Creates a new invite for spaceId and returns { invite_id, token,
+  // expires_at }. `token` exists only in this response — the database keeps
+  // just its hash — so the caller must keep it if the link is to be shown
+  // again later on this device.
+  function createInvite(spaceId, validHours){
+    if(!configured) return need();
+    return rpc("create_pairing_invite", { target_space: spaceId, valid_hours: validHours || 48 }).then(function(rows){ return (rows && rows[0]) || null; });
+  }
+  function cancelInvite(inviteId){
+    if(!configured) return need();
+    return rpc("cancel_pairing_invite", { target_invite: inviteId });
+  }
+  // My own most recent pending invite for spaceId, if any — { id,
+  // expires_at } only; the token itself can't be read back. A direct table
+  // read: the select policy lets the creator see their own invites.
   function myPendingInvite(spaceId){
     if(!configured) return Promise.resolve(null);
-    return client.from("space_invites").select("code, created_at")
+    return client.from("pairing_invites").select("id, expires_at")
       .eq("space_id", spaceId).eq("status", "pending")
       .order("created_at", { ascending: false }).limit(1).then(function(r){
-        if(r.error) throw r.error;
+        if(r.error) throw friendlyError(r.error);
         return (r.data && r.data[0]) || null;
       });
   }
-  // Read-only: who's this code from, before committing to join (see
-  // schema.sql's invite_preview — the "Join this Pairlum?" screen uses this,
-  // not redeemInvite, until the person actually taps Join).
-  function invitePreview(code){
+  // Read-only check before joining: { state, inviter_name, expires_at }.
+  // state is one of valid | invalid | used | cancelled | expired | own |
+  // full | already_paired | signed_out. Rejects only when the request itself
+  // failed (e.g. offline) — the invite may still be fine.
+  function invitePreview(token){
     if(!configured) return need();
-    return client.rpc("invite_preview", { invite_code: code }).then(function(r){
-      if(r.error) throw r.error;
-      return (r.data && r.data[0]) || null;
-    });
+    return rpc("preview_pairing_invite", { raw_token: token }).then(function(rows){ return (rows && rows[0]) || { state: "invalid" }; });
   }
-  // The actual join — only call this after the person has confirmed on the
-  // "Join this Pairlum?" screen.
-  function redeemInvite(code){
+  // The actual join — only after the person taps "Join our Pairlum".
+  // Returns the joined space row.
+  function redeemInvite(token){
     if(!configured) return need();
-    return client.rpc("redeem_space_invite", { invite_code: code }).then(function(r){ if(r.error) throw r.error; return r.data; });
+    return rpc("accept_pairing_invite", { raw_token: token });
   }
   // Pauses the space for BOTH partners (server-enforced: write_space_data
   // refuses while either member isn't 'active') until the same account
@@ -139,6 +156,12 @@ window.PairlumBackend = (function(){
   function disconnectSpace(spaceId){
     if(!configured) return need();
     return client.rpc("disconnect_space", { target_space: spaceId }).then(function(r){ if(r.error) throw r.error; });
+  }
+  // Ends this account's pairing(s) like disconnectSpace, then deletes the
+  // login itself (schema.sql's delete_my_account). Irreversible.
+  function deleteMyAccount(){
+    if(!configured) return need();
+    return rpc("delete_my_account", {});
   }
   function partnerRow(spaceId, myRole){
     if(!configured) return Promise.resolve(null);
@@ -221,10 +244,10 @@ window.PairlumBackend = (function(){
     isConfigured: isConfigured,
     getSession: getSession, onAuthChange: onAuthChange, signUp: signUp, signIn: signIn, signOut: signOut,
     myMembership: myMembership, emptySpaceSeed: emptySpaceSeed, createSpace: createSpace,
-    createInvite: createInvite, revokeInvite: revokeInvite, myPendingInvite: myPendingInvite,
+    createInvite: createInvite, cancelInvite: cancelInvite, myPendingInvite: myPendingInvite,
     invitePreview: invitePreview, redeemInvite: redeemInvite,
     partnerRow: partnerRow,
-    leaveSpace: leaveSpace, rejoinSpace: rejoinSpace, disconnectSpace: disconnectSpace,
+    leaveSpace: leaveSpace, rejoinSpace: rejoinSpace, disconnectSpace: disconnectSpace, deleteMyAccount: deleteMyAccount,
     fetchSpace: fetchSpace, writeSpaceData: writeSpaceData, subscribeSpace: subscribeSpace,
     uploadMedia: uploadMedia, downloadMedia: downloadMedia, deleteMedia: deleteMedia
   };

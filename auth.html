@@ -56,13 +56,6 @@
       <div class="auth-error" id="authError" role="alert"></div>
       <div class="auth-ok" id="authOk" role="status"></div>
 
-      <div id="alreadyInPanel" hidden>
-        <p class="pg-lead" style="margin:0 0 18px" id="alreadyInText"></p>
-        <button class="btn" type="button" id="continueBtn" style="width:100%">Continue to Pairlum →</button>
-        <button class="textlink-center" type="button" id="switchAccountBtn" style="margin-top:14px">Not you? Log out and
-          use a different account</button>
-      </div>
-
       <div id="signInOptions">
         <button class="btn-google btn-google--primary" type="button" id="googleBtn" style="width:100%">
           <svg width="20" height="20" viewBox="0 0 18 18" aria-hidden="true">
@@ -159,6 +152,10 @@
         history.replaceState(null, '', location.pathname + (rest === '?' ? '' : rest) + location.hash);
         if (!location.hash) location.hash = '#signup';
       })();
+      // Holding a partner's invite (just now, or from an earlier visit):
+      // say so, so signing in reads as the step towards joining them.
+      var invited = false;
+      try { invited = !!localStorage.getItem((window.PAIRLUM_STORAGE_NS || '') + 'pairlum-pending-invite'); } catch (e) { }
 
       var mode = location.hash === '#signup' ? 'signup' : 'login';
       var tabLogin = $('#tabLogin'), tabSignup = $('#tabSignup'), form = $('#authForm'), submitBtn = $('#authSubmit'), pw = $('#password'), note = $('#authNote'), err = $('#authError'), ok = $('#authOk');
@@ -171,14 +168,7 @@
 
       function goHome() { location.href = PL.home(); }
 
-      // Either Google just redirected back here with a session in the URL (which
-      // the client above already parsed before this line runs, since
-      // detectSessionInUrl's check happens during client construction), or this
-      // account is simply already signed in from an earlier visit. Either way,
-      // jumping straight to the dashboard with no warning reads as a bug ("I
-      // clicked the login page and it skipped straight to the app") — show who's
-      // signed in and let them choose, instead of silently redirecting.
-      var alreadyInPanel = $('#alreadyInPanel'), signInOptions = $('#signInOptions'), alreadyInText = $('#alreadyInText');
+      var signInOptions = $('#signInOptions');
       var resetRequestPanel = $('#resetRequestPanel'), setNewPasswordPanel = $('#setNewPasswordPanel');
 
       var heroEyebrow = $('#authEyebrow'), heroHeadline = $('#authHeadline'), heroLead = $('#authLead');
@@ -198,17 +188,15 @@
       var isRecovery = /type=recovery/.test(location.hash) || /type=recovery/.test(location.search);
       if (isRecovery) {
         signInOptions.hidden = true;
-        alreadyInPanel.hidden = true;
         setNewPasswordPanel.hidden = false;
         setHero('Almost there', 'Choose a new password.', 'One more step and you’re back in.');
       }
 
       if (hasSupabase) {
-        // Detect a fresh Google OAuth callback: Supabase puts access_token in the
-        // URL hash. If we see it, the user just came back from Google — skip the
-        // "already signed in" panel and go straight to the dashboard.
-        var isOAuthCallback = /[#&]access_token=/.test(location.hash);
-
+        // Already signed in — a returning visitor, or just back from Google /
+        // an email confirmation link (detectSessionInUrl parsed that when the
+        // client was created). Either way, straight into the app; a pending
+        // invite is waiting there.
         client.auth.getSession().then(function (res) {
           var session = res.data && res.data.session;
           if (!session) return;
@@ -219,24 +207,6 @@
           goHome();
         });
       }
-      var continueBtn = $('#continueBtn');
-      if (continueBtn) continueBtn.addEventListener('click', goHome);
-      var switchAccountBtn = $('#switchAccountBtn');
-      if (switchAccountBtn) switchAccountBtn.addEventListener('click', function () {
-        switchAccountBtn.disabled = true;
-        (hasSupabase ? client.auth.signOut() : Promise.resolve()).then(function () {
-          // A different person is about to sign in on this same browser —
-          // clear everything cached for the account that was just signed
-          // out (the shared space, pairing state, settings, media), not
-          // just the auth session key, so nothing of theirs lingers for
-          // whoever signs in next.
-          try { localStorage.clear(); } catch (e) { }
-          try { indexedDB.deleteDatabase('pairlum-media-v1'); } catch (e) { }
-          alreadyInPanel.hidden = true;
-          signInOptions.hidden = false;
-        });
-      });
-
       var forgotPasswordBtn = $('#forgotPasswordBtn');
       var resetEmail = $('#resetEmail'), resetSendBtn = $('#resetSendBtn'), resetBackBtn = $('#resetBackBtn');
       if (forgotPasswordBtn) forgotPasswordBtn.addEventListener('click', function () {
@@ -332,7 +302,13 @@
         // Recovery sets its own hero copy above and stays on the new-password
         // panel regardless of mode — don't stomp on it (setMode still runs
         // once at init either way, to get the tabs/note/autocomplete right).
-        if (!isRecovery) setHero(
+        if (isRecovery) { /* keeps its own copy */ }
+        else if (invited) setHero(
+          'You’re invited',
+          'Your partner is waiting for you.',
+          signup ? 'Create your account first — then you’ll see their invitation and can join.' : 'Log in, and you’ll see their invitation next.'
+        );
+        else setHero(
           signup ? 'Begin your First Chapter' : 'Welcome back',
           signup ? 'However far apart, still each other’s whole day.' : 'Still inside each other’s day.',
           signup ? 'A private space just for the two of you — set up in a minute.' : 'Pick up right where you left off.'
@@ -355,7 +331,16 @@
         submitBtn.disabled = true;
 
         if (hasSupabase) {
-          var call = mode === 'signup' ? client.auth.signUp({ email: email, password: password }) : client.auth.signInWithPassword({ email: email, password: password });
+          // The confirmation email links back to this page on this site (it must
+          // also be allowed under Supabase → Auth → URL Configuration → Redirect
+          // URLs). A pending invite rides along in that link, so it still
+          // works if the email is opened on a different phone or computer.
+          var back = location.origin + location.pathname, pendingInvite = '';
+          try { pendingInvite = localStorage.getItem((window.PAIRLUM_STORAGE_NS || '') + 'pairlum-pending-invite') || ''; } catch (e) { }
+          if (pendingInvite) back += '?invite=' + encodeURIComponent(pendingInvite);
+          var call = mode === 'signup'
+            ? client.auth.signUp({ email: email, password: password, options: { emailRedirectTo: back } })
+            : client.auth.signInWithPassword({ email: email, password: password });
           call.then(function (res) {
             submitBtn.disabled = false;
             if (res.error) { showError(res.error.message); return; }

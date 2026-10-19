@@ -1,0 +1,16 @@
+# Netlify HTTP response headers (ignored by the local python dev server).
+# Each page still carries its own Content-Security-Policy <meta> tag; these
+# add what a <meta> tag can't: refusing to be framed by other sites, HTTPS
+# pinning, and limits on powerful browser features.
+
+/*
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'
+  Permissions-Policy: camera=(self), microphone=(self), geolocation=(), payment=(), usb=(), interest-cohort=()
+
+# Always check for a new service worker, so app updates reach people.
+/sw.js
+  Cache-Control: no-cache

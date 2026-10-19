@@ -29,16 +29,35 @@ window.PairlumSync = (function(){
   var LIVE_SIGNAL_KEY = NS + "pairlum-live-signal-v1";
   var HOLD_SIGNAL_KEY = NS + "pairlum-hold-signal-v1";
   var SIGNAL_KEYS = [LIVE_SIGNAL_KEY, HOLD_SIGNAL_KEY];
-  // Set by auth.html when it sees ?invite=CODE in the URL, read (and
-  // cleared) here once a session exists — see boot() and auth.html.
+  // A partner's invite token this browser received: set by auth.html when it
+  // sees ?invite=TOKEN, read (and cleared once settled) here — see boot().
   var PENDING_INVITE_KEY = NS + "pairlum-pending-invite";
+  // MY OWN invite's raw token, kept on the device that created it. The
+  // database stores only a hash, so this is the only place the link can be
+  // shown again after a reload; on any other device, "make a new link".
+  var MY_INVITE_KEY = NS + "pairlum-my-invite-v1";
+  // Set when a link couldn't be used because this account is already
+  // connected — app.js shows it once as a toast, then removes it.
+  var INVITE_NOTICE_KEY = NS + "pairlum-invite-notice";
 
   var B = window.PairlumBackend;
   var configured = B && B.isConfigured();
   var rawSetItem = localStorage.setItem.bind(localStorage);
   var rawGetItem = localStorage.getItem.bind(localStorage);
+  var cfgHours = Number((window.PAIRLUM_CONFIG || {}).inviteValidHours);
+  var INVITE_VALID_HOURS = cfgHours >= 1 && cfgHours <= 168 ? cfgHours : 48;
 
-  var state = { spaceId: null, role: null, myId: null, serverRev: 0, applyingRemote: false, sub: null, inviteCode: null };
+  var state = { spaceId: null, role: null, myId: null, serverRev: 0, applyingRemote: false, sub: null, inviteId: null, offerToken: null };
+
+  function readJson(key){ try{ return JSON.parse(rawGetItem(key) || "null"); }catch(e){ return null; } }
+  function forget(key){ try{ localStorage.removeItem(key); }catch(e){} }
+  // Accepts a bare token or a whole pasted invite link.
+  function inviteTokenFrom(text){
+    var s = String(text || "").trim();
+    var m = /[?&]invite=([^&#\s]+)/.exec(s);
+    if(m){ try{ s = decodeURIComponent(m[1]); }catch(e){ s = m[1]; } }
+    return /^[A-Za-z0-9_-]{8,}$/.test(s) ? s : "";
+  }
 
   function dispatchStorage(key, newValue){
     try{
@@ -94,6 +113,20 @@ window.PairlumSync = (function(){
       console.warn("Pairlum sync: couldn't reach the server, will retry on the next change.", err);
     });
   }
+  // Push the shared record right now instead of after the usual short pause,
+  // and say whether it landed. On a clash with the partner's change, pull
+  // their version in (so a retry works on fresh data) and report false.
+  function pushNow(){
+    if(pendingTimer){ clearTimeout(pendingTimer); pendingTimer = null; }
+    if(!state.spaceId) return Promise.resolve(true);
+    var raw = rawGetItem(SHARED_KEY);
+    if(!raw) return Promise.resolve(true);
+    var data; try{ data = JSON.parse(raw); }catch(e){ return Promise.resolve(false); }
+    return B.writeSpaceData(state.spaceId, data, state.serverRev).then(function(row){
+      if(row){ state.serverRev = row.rev; return true; }
+      return B.fetchSpace(state.spaceId).then(applyRemoteSpace).then(function(){ return false; });
+    });
+  }
   function installOutboundHook(){
     localStorage.setItem = function(key, value){
       rawSetItem(key, value);
@@ -108,9 +141,12 @@ window.PairlumSync = (function(){
     state.sub = B.subscribeSpace(state.spaceId, function(row){
       applyRemoteSpace(row);
     }, function(memberRow){
-      // The partner just redeemed the invite: tell app.js's pairing listener.
+      // The partner just accepted the invite: tell app.js's pairing listener.
       B.partnerRow(state.spaceId, state.role).then(function(partner){
-        if(partner) setPairing({ status: "joined", joinedAt: partner.joined_at, inviteCode: null });
+        if(!partner) return;
+        forget(MY_INVITE_KEY);
+        state.inviteId = null;
+        setPairing({ status: "joined", joinedAt: partner.joined_at, inviteId: null, inviteToken: null, inviteExpiresAt: null });
       });
     }, function(memberRow){
       // A member row's status changed — see leaveSpace/rejoinSpace/
@@ -145,19 +181,66 @@ window.PairlumSync = (function(){
   // idbDeleteMedia in app.js, so a partner's device can actually fetch
   // photos/voice the other partner captured (today those bytes only ever
   // lived in that one browser's IndexedDB). ----
+  // Uploads that haven't happened yet. A photo, clip or voice note always
+  // lands in this device's IndexedDB first; its upload to the shared space
+  // used to be fire-and-forget, so one failed request (or a profile photo
+  // set before any space existed) meant the partner never got the file. Now
+  // its id is remembered until an upload actually succeeds, and retried at
+  // start-up, when the connection comes back, and every minute meanwhile.
+  var PENDING_MEDIA_KEY = NS + "pairlum-media-pending-v1";
+  function pendingMedia(){ var l = readJson(PENDING_MEDIA_KEY); return Array.isArray(l) ? l : []; }
+  function setPendingMedia(l){ try{ rawSetItem(PENDING_MEDIA_KEY, JSON.stringify(l)); }catch(e){} }
+  function rememberUpload(id){ var l = pendingMedia(); if(l.indexOf(id) === -1){ l.push(id); setPendingMedia(l); } }
+  function forgetUpload(id){ var l = pendingMedia(); if(l.indexOf(id) > -1) setPendingMedia(l.filter(function(x){ return x !== id; })); }
+  var flushing = false;
+  function flushPendingMedia(){
+    var reader = window.PairlumMediaBridge && window.PairlumMediaBridge.readLocal;
+    if(flushing || !configured || !state.spaceId || typeof reader !== "function") return;
+    var list = pendingMedia();
+    if(!list.length) return;
+    flushing = true;
+    var i = 0;
+    (function next(){
+      if(i >= list.length){ flushing = false; return; }
+      var id = list[i++];
+      reader(id, function(blob){
+        // null: no longer on this device (deleted meanwhile) — nothing to send.
+        // undefined: couldn't read it right now — keep it for the next try.
+        if(blob === null){ forgetUpload(id); next(); return; }
+        if(!blob){ next(); return; }
+        B.uploadMedia(state.spaceId, id, blob).then(function(){ forgetUpload(id); next(); }, function(){ next(); });
+      });
+    })();
+  }
+  var retriesInstalled = false;
+  function installMediaRetries(){
+    if(retriesInstalled) return;
+    retriesInstalled = true;
+    try{ window.addEventListener("online", flushPendingMedia); }catch(e){}
+    setInterval(function(){ if(pendingMedia().length) flushPendingMedia(); }, 60000);
+    // app.js registers PairlumMediaBridge.readLocal as it loads, after boot.
+    setTimeout(flushPendingMedia, 3000);
+  }
+
   window.PairlumMediaBridge = {
     upload: function(id, blob){
-      if(!configured || !state.spaceId) return;
-      B.uploadMedia(state.spaceId, id, blob).catch(function(err){ console.warn("Pairlum media upload failed", id, err); });
+      if(!configured) return;
+      if(!state.spaceId){ rememberUpload(id); return; }
+      B.uploadMedia(state.spaceId, id, blob).then(function(){ forgetUpload(id); }, function(err){
+        rememberUpload(id);
+        console.warn("Pairlum: couldn't upload yet, will retry", id, err);
+      });
     },
     download: function(id, cb){
       if(!configured || !state.spaceId) return cb(null, null);
       B.downloadMedia(state.spaceId, id).then(function(blob){ cb(null, blob); }, function(){ cb(null, null); });
     },
     remove: function(id){
+      forgetUpload(id);
       if(!configured || !state.spaceId) return;
       B.deleteMedia(state.spaceId, id).catch(function(){});
     }
+    // readLocal(id, cb) is added by app.js — a local-only IndexedDB read.
   };
 
   // ---- role → app.js's internal ids. Arbitrary but fixed mapping: role 'a'
@@ -177,11 +260,43 @@ window.PairlumSync = (function(){
   // for whatever was never touched, so setting your name first and THEN
   // creating or accepting an invite doesn't lose it the moment a real space
   // exists.
+  // Before joining anyone, this device kept my profile photo as app.js's
+  // "avatar:u_aarav" — but in the space I'm joining, u_aarav is my partner.
+  // Move it to my new slot (u_mira) so it neither shows up as their picture
+  // nor gets uploaded over it. Resolves true if a photo was moved.
+  function moveMyAvatarToJoinerSlot(){
+    return new Promise(function(resolve){
+      try{
+        var r = indexedDB.open(NS + "pairlum-media-v1", 1);
+        r.onupgradeneeded = function(){ r.result.createObjectStore("media"); };
+        r.onerror = function(){ resolve(false); };
+        r.onsuccess = function(){
+          try{
+            var tx = r.result.transaction("media", "readwrite"), store = tx.objectStore("media"), moved = false;
+            var get = store.get("avatar:u_aarav");
+            get.onsuccess = function(){
+              if(!get.result) return;
+              store.put(get.result, "avatar:u_mira");
+              store.delete("avatar:u_aarav");
+              moved = true;
+            };
+            tx.oncomplete = function(){ resolve(moved); };
+            tx.onerror = tx.onabort = function(){ resolve(false); };
+          }catch(e){ resolve(false); }
+        };
+      }catch(e){ resolve(false); }
+    });
+  }
+
+  // Read from whichever profile slot this device has been using for me so
+  // far — before joining anyone's space that is always app.js's "u_aarav"
+  // (boot() sets it for a space-less account, and anyone who started their
+  // own space is its role 'a').
   function localProfileFallback(session){
-    var saved = {};
+    var saved = {}, me = "u_aarav";
     try{ saved = JSON.parse(rawGetItem(SHARED_KEY) || "{}").profiles || {}; }catch(e){}
-    return { aarav: Object.assign({ name: deriveDisplayName(session) }, saved.u_aarav || {}),
-             mira: Object.assign({ name: deriveDisplayName(session) }, saved.u_mira || {}) };
+    try{ me = sessionStorage.getItem(ME_KEY) || "u_aarav"; }catch(e){}
+    return Object.assign({ name: deriveDisplayName(session) }, saved[me] || {});
   }
 
   // Internal: makes sure the caller has a space to attach an invite to,
@@ -191,7 +306,7 @@ window.PairlumSync = (function(){
   // second space.
   function ensureSpace(session){
     if(state.spaceId) return Promise.resolve(state.spaceId);
-    var mine = localProfileFallback(session).aarav;
+    var mine = localProfileFallback(session);
     return B.createSpace().then(function(space){
       state.spaceId = space.id;
       state.role = "a";
@@ -222,56 +337,88 @@ window.PairlumSync = (function(){
     isConfigured: function(){ return configured; },
     hasSpace: function(){ return !!state.spaceId; },
     role: function(){ return state.role; },
+    inviteTokenFrom: inviteTokenFrom,
+    // A link (or token) pasted into the pairing screen goes through exactly
+    // the same path as one opened from a message: keep it, reload, and let
+    // boot() show the "Join our Pairlum?" confirmation with the inviter's
+    // name. Returns false if it doesn't look like an invite at all.
+    openInvite: function(text){
+      var t = inviteTokenFrom(text);
+      if(!t) return false;
+      try{ rawSetItem(PENDING_INVITE_KEY, t); }catch(e){ return false; }
+      location.reload();
+      return true;
+    },
     // Creates this account's space first if it doesn't have one yet (see
-    // ensureSpace above), then a shareable invite for it — or re-fetches
-    // the existing pending one, so opening the pairing screen twice doesn't
-    // invalidate a link already sent. No reload needed: the pairing panel
-    // re-renders straight from the returned code.
+    // ensureSpace above), then a new invite link for it. A new link always
+    // replaces any older one (the server cancels it). The raw token is kept
+    // on this device only, so the link can be shown again after a reload.
     createInvite: function(){
       return B.getSession().then(function(session){
-        return ensureSpace(session).then(function(spaceId){ return B.createInvite(spaceId); });
+        return ensureSpace(session).then(function(spaceId){ return B.createInvite(spaceId, INVITE_VALID_HOURS); });
       }).then(function(inv){
-        state.inviteCode = inv.code;
-        setPairing({ status: "invite_ready", inviteCode: inv.code, inviteSentAt: inv.created_at });
+        if(!inv || !inv.token) throw new Error("Couldn't create an invite. Try again.");
+        try{ rawSetItem(MY_INVITE_KEY, JSON.stringify({ id: inv.invite_id, token: inv.token, expiresAt: inv.expires_at })); }catch(e){}
+        state.inviteId = inv.invite_id;
+        setPairing({ status: "invite_ready", inviteId: inv.invite_id, inviteToken: inv.token, inviteExpiresAt: inv.expires_at });
+        // There's a space now: anything saved before it existed (e.g. a
+        // profile photo) can finally go up.
+        installMediaRetries();
+        flushPendingMedia();
         return inv;
       });
     },
-    revokeInvite: function(){
-      return B.revokeInvite(state.inviteCode).then(function(){
-        state.inviteCode = null;
-        setPairing({ status: "not_started", inviteCode: null, inviteSentAt: null });
+    cancelInvite: function(){
+      return B.cancelInvite(state.inviteId).then(function(){
+        forget(MY_INVITE_KEY);
+        state.inviteId = null;
+        setPairing({ status: "not_started", inviteId: null, inviteToken: null, inviteExpiresAt: null });
       });
     },
-    // The OTHER side of pairing: this browser is holding a pending invite
-    // code (from opening a link — see boot() below), not yet redeemed.
-    // These act on that stashed code, not on state.spaceId (this account
-    // doesn't have a space yet — that's the point).
-    // `code` is optional — omit it to redeem the stashed offer from a link
-    // (state.inviteCode); pass one to redeem a code typed directly into the
-    // "Already have an invite code?" fallback field instead.
-    acceptInviteOffer: function(code){
+    // The OTHER side of pairing: this browser holds a partner's invite token
+    // (from opening their link — see boot() below), not yet accepted.
+    // `token` is optional — omit it to accept the link this browser opened;
+    // pass one to accept a link or token pasted into the fallback field.
+    acceptInviteOffer: function(token){
+      var t = token || state.offerToken;
+      if(!t) return Promise.reject(new Error("That doesn't look like a Pairlum invite link."));
       return B.getSession().then(function(session){
-        return B.redeemInvite(code || state.inviteCode).then(function(space){
-          // redeem_space_invite only adds the space_members row — it leaves
+        return B.redeemInvite(t).then(function(space){
+          // accept_pairing_invite only adds the space_members row — it leaves
           // profiles.u_mira as the inviter's neutral "Your partner" seed, so
-          // stamp a real name in now, the same way ensureSpace does for the
-          // inviter's own side.
-          var mine = localProfileFallback(session).mira;
-          var data = space.data || {};
-          data.profiles = data.profiles || {};
-          data.profiles.u_mira = mine;
-          return B.writeSpaceData(space.id, data, space.rev);
+          // stamp my real profile in now, the same way ensureSpace does for
+          // the inviter's side. The join itself has already succeeded at this
+          // point, so nothing after it may surface as "couldn't join".
+          var mine = localProfileFallback(session);
+          return moveMyAvatarToJoinerSlot().then(function(moved){
+            if(!moved) delete mine.photoAt; // no photo here to show
+            // Anything queued for upload belonged to my space-less self; the
+            // only thing worth carrying over is the photo, under its new id.
+            setPendingMedia(moved ? ["avatar:u_mira"] : []);
+            var data = space.data || {};
+            data.profiles = data.profiles || {};
+            data.profiles.u_mira = mine;
+            return B.writeSpaceData(space.id, data, space.rev);
+          }).catch(function(err){
+            console.warn("Pairlum: joined, but couldn't save your profile yet — set it in Profile.", err);
+          });
         });
       }).then(function(){
-        try{ localStorage.removeItem(PENDING_INVITE_KEY); }catch(e){}
+        forget(PENDING_INVITE_KEY);
+        forget(MY_INVITE_KEY);
         location.reload();
       });
     },
+    // "Not now" on the Join screen, or "OK" on a link that can't be used:
+    // forget the link and reload, so boot() shows this account's own state
+    // (blank, or its own space and invite) instead of the offer.
     declineInviteOffer: function(){
-      try{ localStorage.removeItem(PENDING_INVITE_KEY); }catch(e){}
-      state.inviteCode = null;
-      setPairing({ status: "not_started", inviteCode: null, inviteFromName: null });
+      forget(PENDING_INVITE_KEY);
+      location.reload();
     },
+    // "Try again" after the link couldn't be checked (e.g. offline) — the
+    // link is still kept, so a reload simply checks it again.
+    retryInviteCheck: function(){ location.reload(); },
     // Steps away without ending the connection: pauses writes for THIS
     // account only (write_space_data requires the caller to be 'active') —
     // the partner keeps reading and writing normally. setPairing updates
@@ -292,12 +439,80 @@ window.PairlumSync = (function(){
     disconnect: function(){
       return B.disconnectSpace(state.spaceId).then(function(){ location.reload(); });
     },
+    // "Delete my account", server half. app.js has already removed my own
+    // content from the shared record (locally) and from this device; here:
+    // delete my files from storage, make sure that removal actually reached
+    // the server, then delete the account itself, sign out and wipe this
+    // device. Rejects — with nothing deleted on the server — if any step
+    // before the final one fails, so the person can simply try again.
+    deleteAccount: function(mediaIds){
+      var ids = (mediaIds || []).filter(function(id){ return id && String(id).indexOf("orig:") !== 0; });
+      var removeFiles = state.spaceId && ids.length ? B.deleteMedia(state.spaceId, ids).catch(function(){}) : Promise.resolve();
+      return removeFiles.then(pushNow).then(function(ok){
+        if(!ok) throw new Error("Your partner changed something at the same moment, so your account wasn't deleted yet. Tap Delete again.");
+        return B.deleteMyAccount();
+      }).then(function(){
+        return B.signOut().catch(function(){});
+      }).then(function(){
+        clearLocalCache();
+        location.href = "index.html";
+      });
+    },
     // A real sign-out is also "a different person may use this device next":
     // clear every bit of this account's cached data first, not just the
     // Supabase session, so nothing of theirs lingers for whoever signs in
     // after them on the same browser.
     signOut: function(){ return B.signOut().then(function(){ clearLocalCache(); location.href = "index.html"; }); }
   };
+
+  // ---- invite links during boot --------------------------------------------
+  // If this browser holds a partner's invite link, check it (read-only) and
+  // turn the result into a pairing-state patch: the Join screen when it's
+  // usable, a plain explanation when it isn't. Never accepts anything.
+  // Resolves to a patch, or null when there's nothing to show.
+  function checkPendingInvite(){
+    var token = inviteTokenFrom(rawGetItem(PENDING_INVITE_KEY));
+    if(!token){ forget(PENDING_INVITE_KEY); return Promise.resolve(null); }
+    state.offerToken = token;
+    return B.invitePreview(token).then(function(p){
+      var s = (p && p.state) || "invalid";
+      if(s === "valid") return { status: "invite_offer", inviteFromName: p.inviter_name || "Your partner", inviteOfferExpiresAt: p.expires_at };
+      // Everything else is final for this link — stop holding on to it.
+      forget(PENDING_INVITE_KEY);
+      state.offerToken = null;
+      if(s === "already_paired"){
+        try{ sessionStorage.setItem(INVITE_NOTICE_KEY, "already_paired"); }catch(e){}
+        return null;
+      }
+      return { status: "invite_problem", inviteProblem: s };
+    }, function(){
+      // The check itself failed (offline, server unreachable): the link may
+      // be perfectly fine, so keep it and offer a retry.
+      return { status: "invite_problem", inviteProblem: "network" };
+    });
+  }
+  // My own pending invite for this space, if any. Shows the link again when
+  // this device created it; otherwise says one is waiting and offers a new
+  // link (the old token can't be read back from the database).
+  function restoreMyInvite(){
+    return B.myPendingInvite(state.spaceId).then(function(inv){
+      var mine = readJson(MY_INVITE_KEY);
+      if(!inv){
+        forget(MY_INVITE_KEY);
+        state.inviteId = null;
+        setPairing({ status: "not_started", inviteId: null, inviteToken: null, inviteExpiresAt: null });
+        return;
+      }
+      state.inviteId = inv.id;
+      var expired = Date.parse(inv.expires_at) <= Date.now();
+      setPairing({
+        status: expired ? "invite_expired" : "invite_ready",
+        inviteId: inv.id,
+        inviteToken: !expired && mine && mine.id === inv.id ? mine.token : null,
+        inviteExpiresAt: inv.expires_at
+      });
+    });
+  }
 
   // ---- boot ----------------------------------------------------------------
   function boot(){
@@ -308,63 +523,56 @@ window.PairlumSync = (function(){
       state.myId = session.user.id;
       return B.myMembership(state.myId);
     }).then(function(membership){
-      if(!membership){
-        // Signed in, but this account hasn't started or joined a space yet.
-        // Seed a blank, local-only record so app.js renders a real empty
-        // shell either way.
-        writeLocal(SHARED_KEY, JSON.stringify(B.emptySpaceSeed()));
-        try{ sessionStorage.setItem(ME_KEY, "u_aarav"); }catch(e){}
-        // This browser may be holding a pending invite code (opened a link
-        // before or while signing in — see auth.html). If so, show the
-        // "Join this Pairlum?" confirmation instead of the plain "create
-        // your own invite" screen; redeeming only happens if they tap Join
-        // (PairlumSpace.acceptInviteOffer), never automatically here.
-        var pendingCode = null;
-        try{ pendingCode = localStorage.getItem(PENDING_INVITE_KEY); }catch(e){}
-        if(pendingCode){
-          state.inviteCode = pendingCode;
-          return B.invitePreview(pendingCode).then(function(preview){
-            setPairing({ status: "invite_offer", inviteCode: pendingCode, inviteFromName: (preview && preview.inviter_name) || "Your partner", joinedAt: null });
-            return { configured: true, hasSpace: false };
-          }, function(){
-            // Expired/used/garbage code: drop it quietly, fall back to normal.
-            try{ localStorage.removeItem(PENDING_INVITE_KEY); }catch(e){}
-            state.inviteCode = null;
-            setPairing({ status: "not_started", inviteCode: null, joinedAt: null });
-            return { configured: true, hasSpace: false };
-          });
-        }
-        setPairing({ status: "not_started", inviteCode: null, inviteSentAt: null, joinedAt: null });
-        return { configured: true, hasSpace: false };
+      // A partner's link opened in this browser (before or while signing in —
+      // see auth.html) is checked first, whatever this account's own state.
+      // Accepting only ever happens when they tap Join, never here.
+      return checkPendingInvite().then(function(offer){ return bootWith(membership, offer); });
+    });
+  }
+  function bootWith(membership, offer){
+    if(!membership){
+      // Signed in, but this account hasn't started or joined a space yet.
+      // Seed a blank, local-only record so app.js renders a real empty shell.
+      writeLocal(SHARED_KEY, JSON.stringify(B.emptySpaceSeed()));
+      try{ sessionStorage.setItem(ME_KEY, "u_aarav"); }catch(e){}
+      setPairing(offer || { status: "not_started", inviteId: null, inviteToken: null, inviteExpiresAt: null, joinedAt: null });
+      return { configured: true, hasSpace: false };
+    }
+    state.spaceId = membership.spaceId;
+    state.role = membership.role;
+    try{ sessionStorage.setItem(ME_KEY, roleToId(state.role)); }catch(e){}
+    var paired = false;
+    return B.fetchSpace(state.spaceId).then(function(row){
+      state.serverRev = row.rev;
+      writeLocal(SHARED_KEY, JSON.stringify(row.data));
+      return B.partnerRow(state.spaceId, state.role);
+    }).then(function(partner){
+      if(partner){
+        paired = true;
+        forget(MY_INVITE_KEY);
+        setPairing({ status: "joined", joinedAt: partner.joined_at, inviteId: null, inviteToken: null, inviteExpiresAt: null });
+      } else {
+        // No partner yet: restore my own in-flight invite, if I made one, so a
+        // reload doesn't lose the "here's your link" screen.
+        return restoreMyInvite();
       }
-      state.spaceId = membership.spaceId;
-      state.role = membership.role;
-      try{ sessionStorage.setItem(ME_KEY, roleToId(state.role)); }catch(e){}
-      return B.fetchSpace(state.spaceId).then(function(row){
-        state.serverRev = row.rev;
-        writeLocal(SHARED_KEY, JSON.stringify(row.data));
-        return B.partnerRow(state.spaceId, state.role);
-      }).then(function(partner){
-        if(partner){
-          setPairing({ status: "joined", joinedAt: partner.joined_at, inviteCode: null });
-        } else {
-          // No partner yet: restore my own in-flight invite, if I made one,
-          // so a reload doesn't lose the "here's your link" screen.
-          return B.myPendingInvite(state.spaceId).then(function(inv){
-            state.inviteCode = inv ? inv.code : null;
-            setPairing(inv
-              ? { status: "invite_ready", inviteCode: inv.code, inviteSentAt: inv.created_at }
-              : { status: "not_started", inviteCode: null, inviteSentAt: null });
-          });
-        }
-      }).then(function(){
-        // Restore "left" across a reload — myMembership() only falls back to
-        // a 'left' row when there's no active one, so this only overrides
-        // the "joined"/"invite_ready" status just computed above, nothing else.
-        if(membership.status === "left") setPairing({ status: "left" });
-        installRealtime();
-        return { configured: true, hasSpace: true };
-      });
+    }).then(function(){
+      // Restore "left" across a reload — myMembership() only falls back to a
+      // 'left' row when there's no active one.
+      if(membership.status === "left") setPairing({ status: "left" });
+      if(offer && paired){
+        // Already connected: a leftover link must never replace "joined"
+        // (that would pause Shared Day). Drop it and say why, once.
+        forget(PENDING_INVITE_KEY);
+        if(offer.status === "invite_offer"){ try{ sessionStorage.setItem(INVITE_NOTICE_KEY, "already_paired"); }catch(e){} }
+      } else if(offer){
+        // A space nobody else has joined yet: their partner's link takes over
+        // the screen, since that's the space they actually mean to be in.
+        setPairing(offer);
+      }
+      installRealtime();
+      installMediaRetries();
+      return { configured: true, hasSpace: true };
     });
   }
 

@@ -17,6 +17,18 @@ devices, and real cloud storage for photos/voice notes.
 2. Paste the entire contents of `supabase/schema.sql` (in this repo) and click **Run**.
 3. It's safe to re-run if you ever need to — it only creates things that don't already exist.
 
+**Already set up from an older version?** Don't re-run everything blindly —
+run the files in `supabase/migrations/` that you haven't run yet, oldest
+first, the same way (SQL Editor → paste → Run). Each one says at the top
+what it changes; they're safe to run twice and don't delete existing data.
+
+- `20261015120000_secure_pairing_invites.sql` — switches pairing to secure
+  invite links (see section 5). Adds the `pairing_invites` table, retires the
+  old 8-character codes (they stop working; nothing is deleted).
+- `20261016120000_delete_my_account.sql` — makes Settings → Privacy →
+  **Delete my account** actually delete the login (it used to only clear the
+  person's content). Adds one function; changes nothing else.
+
 ## 3. Turn on Realtime (usually already on)
 
 Supabase enables the `supabase_realtime` publication by default; the schema
@@ -44,13 +56,26 @@ supabaseAnonKey: "eyJhbGciOi...",
 That's it — reload `index.html`/`auth.html`/`app.html`. From here on:
 
 - `auth.html` creates/signs in to a real account.
-- The first time you land in `app.html` with no space yet, the Pairing
-  screen (Settings → Partner & pairing) offers **Create invite link**. One
-  partner creates it and shares the link (text, chat, however) with the
-  other — opening it drops a code into that browser, and after signing up
-  or logging in there, a "Join this Pairlum?" screen confirms before
-  anything is paired. (Got just the raw code instead of a working link?
-  **Already have an invite code?** on the same screen takes that too.)
+- **Pairing two accounts:**
+  1. Partner A: **Us → Settings → Partner & pairing → Invite your partner**.
+     This makes a private link; **Share invite link** opens the phone's
+     share sheet (or copies the link), **Copy** copies it.
+  2. Partner A sends it any way they like — a message, a chat, an email.
+  3. Partner B opens the link. If they aren't signed in, they sign up or
+     log in first; the invite is kept in that browser meanwhile.
+  4. Partner B sees "*A* invited you to their Pairlum" and taps **Join our
+     Pairlum**. Nothing is connected until they tap it.
+  5. Partner A's screen updates on its own, and both now share one space.
+- About the links: each one works **once**, for **48 hours** (change with
+  `inviteValidHours: 1–168` in `pairlum-config.js`). Making a new link
+  cancels the previous one; **Cancel invite** stops it immediately. The
+  database stores only a fingerprint (hash) of each link, so a link can be
+  shown again only on the device that made it — anywhere else, make a new
+  one. Got a link but opened Pairlum another way? **Got an invite link from
+  your partner?** on the same screen accepts a pasted link.
+- If both partners tapped **Invite your partner** before either opened the
+  other's link, that's fine: whoever joins steps out of their own empty
+  space (it's kept, just no longer active).
 - From then on, everything (Shared Day, Letters, I Need You, Our Story,
   Our DNA, photos, voice notes, etc.) syncs live between both partners'
   devices.
@@ -72,11 +97,11 @@ real Google OAuth client in two places:
 
 **b) Supabase Dashboard**
 1. **Authentication → Providers → Google** → toggle it on, paste the Client ID and Client secret from above, save.
-2. **Authentication → URL Configuration → Redirect URLs** → add every origin+path you'll actually open `auth.html` from, e.g.:
+2. **Authentication → URL Configuration → Redirect URLs** → add each site you open Pairlum from, with a `**` wildcard (section 7 explains why), e.g.:
    ```
-   http://localhost:8743/auth.html
+   http://localhost:8743/**
    ```
-   and later your real domain's `/auth.html` once you deploy. Without this, Supabase will refuse to send Google's response back to the page.
+   and later `https://your-domain/**` once you deploy. Without this, Supabase will refuse to send Google's response back to the page.
 
 That's it — reload `auth.html` and "Continue with Google" will work for both signing up and logging in (it's the same button either way).
 
@@ -87,6 +112,19 @@ a session. `auth.html` already handles this (it tells you to check your
 email instead of bouncing you into a half-signed-in state). If you'd rather
 skip confirmation for quick testing: **Authentication → Providers → Email →
 disable "Confirm email"**.
+
+The confirmation link brings people back to `auth.html` on the site they
+signed up from — **only if** that address is allowed. In **Authentication →
+URL Configuration**:
+- **Site URL**: your real site (while testing locally: `http://localhost:8743/auth.html`).
+  Supabase's default here is `http://localhost:3000`, which is *not* where
+  Pairlum runs — leaving it means confirmation links open a dead page.
+- **Redirect URLs**: add each site you use with a `**` wildcard, e.g.
+  `http://localhost:8743/**` and later `https://your-domain/**`. The wildcard
+  matters: for a partner signing up from an invite, the confirmation link
+  carries their invite (`auth.html?invite=…`), so it still works when the
+  email is opened on a different phone or computer — an exact
+  `…/auth.html` entry wouldn't match that.
 
 ## 8. Voice "understanding" (transcription + write-up)
 
@@ -150,13 +188,27 @@ they're left as clearly-labeled placeholders, not wired to real money/APIs:
   is charged"). Wiring a real charge means adding a Razorpay/Stripe account
   and a server-side webhook; ask if you want this built out.
 - **Google Photos import** — needs a Google Cloud OAuth client ID in
-  `pairlum-config.js`'s `googleClientId`. Until it's set, that button says
-  so plainly instead of pretending to work.
+  `pairlum-config.js`'s `googleClientId` (already set), with the **Google
+  Photos Picker API** enabled for that Cloud project and your site listed
+  under the client's **Authorized JavaScript origins** (e.g.
+  `http://localhost:8743`). Until the ID is set, that button says so plainly
+  instead of pretending to work.
 
 Voice "understanding" (transcription/write-up) is no longer a stub — see
 step 8 above, the code is fully built, it's just a deploy + OpenAI key away.
 
 Live audio ("I Need You" live listening) *is* real here — it's genuine
 peer-to-peer WebRTC, signaled through Supabase Realtime, using Google's free
-public STUN servers by default (override via `PAIRLUM_CONFIG.iceServers` if
-you need a TURN server for stricter networks).
+public STUN server by default. STUN alone connects most home Wi-Fi, but many
+mobile networks need a **TURN relay**: get one from a TURN provider and add
+it as `iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls:
+"turn:…", username: "…", credential: "…" }]` in `pairlum-config.js`.
+
+## Deploying (Netlify)
+
+Upload the project folder as-is — there's no build step. The `_headers` file
+at the root is picked up by Netlify automatically and adds security headers
+a page can't set for itself (no framing by other sites, HTTPS-only, camera
+and microphone limited to Pairlum). After deploying, add the live address to
+Supabase's Site URL and Redirect URLs (section 7) and to the Google OAuth
+client's origins (section 6).
