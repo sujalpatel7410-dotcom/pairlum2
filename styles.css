@@ -1709,6 +1709,18 @@ ul{margin:0;padding:0;list-style:none}
   flex:0 0 auto;border:none;background:none;color:var(--ink-faint);cursor:pointer;font-size:.82rem;padding:2px 4px;
 }
 .date-card-remove:hover{color:var(--wine)}
+/* the second tap of "Remove?" */
+.date-card-remove.is-armed{color:#fff;background:var(--wine);border-radius:999px;padding:3px 10px;font-size:.74rem;font-weight:600;white-space:nowrap}
+.date-card-remove.is-armed:hover{color:#fff}
+
+/* Privacy → Recently Deleted */
+.trash-list{list-style:none;margin:14px 0 0;padding:0}
+.trash-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 2px;border-top:1px solid var(--line-soft)}
+.trash-row .copy{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.trash-row .title{font-size:.9rem;color:var(--ink);font-weight:600;overflow-wrap:anywhere}
+.trash-row .sub{font-size:.76rem;color:var(--ink-faint);line-height:1.4}
+.trash-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;flex:0 0 auto}
+@media (max-width:440px){.trash-row{flex-direction:column;align-items:stretch}.trash-actions{justify-content:flex-start}}
 
 /* ---- Letters tab gate — a tap-to-open mailbox moment, once per visit -- */
 .letters-gate{display:none}

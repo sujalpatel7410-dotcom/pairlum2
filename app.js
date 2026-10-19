@@ -517,6 +517,7 @@
     var r = inspectStored(raw);
     if (r.damage) {
       if (!RECOVERY) RECOVERY = { reason: r.damage, v: r.v, fields: r.fields || [], raw: raw };
+      TRASH = [];
       return fillSharedDefaults(seedShared()); // a stand-in for the screen only; it is never saved
     }
     var db = r.db;
@@ -524,12 +525,128 @@
       db = seedShared();
       try { localStorage.setItem(SHARED_KEY, JSON.stringify(db)); } catch (e) { }
     }
-    return fillSharedDefaults(db);
+    return liftTrash(fillSharedDefaults(db));
   }
   function writeShared() {
     if (RECOVERY) return false;
-    try { localStorage.setItem(SHARED_KEY, JSON.stringify(DB)); return true; }
+    try { localStorage.setItem(SHARED_KEY, JSON.stringify(withTrash(DB))); return true; }
     catch (e) { return false; }
+  }
+
+  /* ---- Recently Deleted ----------------------------------------------
+     Removing something you added — a memory, a date, a Someday wish, a
+     plan, a chapter, a ritual, a collection or an entry in one — doesn't
+     erase it straight away. It's marked deletedAt/deletedBy and kept for
+     30 days, so a slip can be undone (Settings → Privacy → Recently
+     Deleted). After that it's cleared for good, with its photo, the next
+     time the person who removed it opens Pairlum (purgeExpiredTrash).
+     The rest of the app never sees these items: readShared() lifts them
+     out into TRASH and writeShared() puts them back, so no screen, count,
+     notification, export or Book has to know about them. The server keeps
+     the same 30 days (schema.sql's guard).                               */
+  var TRASH_MS = 30 * 86400000;
+  var TRASH_LISTS = ["memories", "dates", "someday", "plans", "chapters", "dna.rituals", "dna.collections"];
+  var TRASH = []; // { list, parent, item } — parent is the collection's id for an entry ("collitem")
+  function trashArr(db, list, create) {
+    var host = db, key = list;
+    if (list.indexOf("dna.") === 0) {
+      if (!db.dna || typeof db.dna !== "object") { if (!create) return null; db.dna = {}; }
+      host = db.dna; key = list.slice(4);
+    }
+    if (!Array.isArray(host[key])) { if (!create) return null; host[key] = []; }
+    return host[key];
+  }
+  function collectionIn(db, id) {
+    return (trashArr(db, "dna.collections") || []).filter(function (c) { return c && c.id === id; })[0] || null;
+  }
+  function isTrashed(x) { return !!(x && typeof x === "object" && x.deletedAt); }
+  function liftTrash(db) {
+    TRASH = [];
+    TRASH_LISTS.forEach(function (list) {
+      var arr = trashArr(db, list);
+      if (!arr || !arr.some(isTrashed)) return;
+      var live = arr.filter(function (x) { if (isTrashed(x)) { TRASH.push({ list: list, parent: null, item: x }); return false; } return true; });
+      arr.length = 0;
+      Array.prototype.push.apply(arr, live);
+    });
+    // Entries of a collection that is itself in Recently Deleted stay inside it.
+    (trashArr(db, "dna.collections") || []).forEach(function (c) {
+      if (!c || !Array.isArray(c.items) || !c.items.some(isTrashed)) return;
+      c.items = c.items.filter(function (x) { if (isTrashed(x)) { TRASH.push({ list: "collitem", parent: c.id, item: x }); return false; } return true; });
+    });
+    return db;
+  }
+  function withTrash(db) {
+    if (!TRASH.length) return db;
+    var out = JSON.parse(JSON.stringify(db));
+    TRASH.forEach(function (t) { if (t.list !== "collitem") trashArr(out, t.list, true).push(t.item); });
+    TRASH.forEach(function (t) {
+      if (t.list !== "collitem") return;
+      var c = collectionIn(out, t.parent);
+      if (c) { if (!Array.isArray(c.items)) c.items = []; c.items.push(t.item); } // a collection cleared for good takes its entries with it
+    });
+    return out;
+  }
+  // Inside mutate(): moves the matching items of a list (or of collection
+  // `parent`'s entries) to Recently Deleted. Returns how many moved.
+  function moveToTrash(db, list, match, parent) {
+    var arr = list === "collitem" ? ((collectionIn(db, parent) || {}).items || []) : (trashArr(db, list) || []);
+    var n = 0, at = Date.now();
+    for (var i = arr.length - 1; i >= 0; i--) {
+      if (!match(arr[i])) continue;
+      var item = arr.splice(i, 1)[0];
+      item.deletedAt = at; item.deletedBy = ME;
+      TRASH.push({ list: list, parent: parent || null, item: item });
+      n++;
+    }
+    return n;
+  }
+  // Inside mutate(): puts one item back where it was. False if it can't go
+  // back (an entry whose collection was cleared for good).
+  function restoreFromTrash(db, list, id) {
+    for (var i = 0; i < TRASH.length; i++) {
+      var t = TRASH[i];
+      if (t.list !== list || !t.item || t.item.id !== id) continue;
+      var host;
+      if (list === "collitem") {
+        var c = collectionIn(db, t.parent);
+        if (!c) return false;
+        if (!Array.isArray(c.items)) c.items = [];
+        host = c.items;
+      } else host = trashArr(db, list, true);
+      TRASH.splice(i, 1);
+      delete t.item.deletedAt; delete t.item.deletedBy;
+      host.push(t.item);
+      return true;
+    }
+    return false;
+  }
+  // Inside mutate(): clears matching items for good. Returns them, so their
+  // files can be removed once the change is saved (forgetTrashedFiles).
+  function takeFromTrash(match) {
+    var gone = [];
+    TRASH = TRASH.filter(function (t) { if (match(t)) { gone.push(t); return false; } return true; });
+    return gone;
+  }
+  function forgetTrashedFiles(gone) {
+    gone.forEach(function (t) {
+      if (t.list !== "memories" || t.item.by !== ME || t.item.demo) return;
+      idbDeleteMedia(t.item.id); idbDeleteKeys(["orig:" + t.item.id]); delete MEDIA_URLS[t.item.id];
+    });
+  }
+  function myTrash() {
+    return TRASH.filter(function (t) { return t.item && t.item.deletedBy === ME; })
+      .sort(function (a, b) { return (b.item.deletedAt || 0) - (a.item.deletedAt || 0); });
+  }
+  // When Pairlum opens: what you removed over 30 days ago is cleared for
+  // good. Only the person who removed something clears it, so their device
+  // can delete its photo too.
+  function purgeExpiredTrash() {
+    if (RECOVERY || !isPaired()) return;
+    var now = Date.now(), expired = function (t) { return t.item.deletedBy === ME && now - (t.item.deletedAt || 0) > TRASH_MS; };
+    if (!TRASH.some(expired)) return;
+    var gone = [];
+    if (mutate(function () { gone = takeFromTrash(expired); })) forgetTrashedFiles(gone);
   }
   // Every change goes through here: re-read the latest shared record first,
   // so two partners acting in the same second never overwrite each other.
@@ -575,9 +692,9 @@
       window.__pairlumTestStaleRead = null;
     }
     if (DB.ops.indexOf(opId) > -1) return true; // already applied
-    var beforeAll = JSON.stringify(DB), before = connectionMark(DB);
+    var beforeAll = JSON.stringify(DB) + JSON.stringify(TRASH), before = connectionMark(DB);
     fn(DB);
-    var changedAny = JSON.stringify(DB) !== beforeAll;
+    var changedAny = JSON.stringify(DB) + JSON.stringify(TRASH) !== beforeAll;
     if (!changedAny) return true;
     var changedShared = connectionMark(DB) !== before;
     if (!opts.evenIfPaused && typeof SPACE !== "undefined" && SPACE.pairing && SPACE.pairing.status !== "joined") {
@@ -2497,11 +2614,11 @@
         return;
       }
       var id = chapterEditState.id;
-      if (!mutate(function (db) { db.chapters = db.chapters.filter(function (x) { return x.id !== id; }); })) return;
+      if (!mutate(function (db) { moveToTrash(db, "chapters", function (x) { return x.id === id; }); })) return;
       renderChapters();
       renderMemoryTimeline();
       closeOverlay("chapterOverlay");
-      showToast("Chapter removed. Its memories stay in the timeline.");
+      trashToast("Chapter removed, its memories stay");
     });
   }
 
@@ -3647,6 +3764,25 @@
     window.clearTimeout(toastTimer);
     toastTimer = window.setTimeout(function () { t.classList.remove("is-shown"); }, 2800);
   }
+  // Every delete asks first: the first tap turns the button into "Remove?"
+  // (or `label`), and only a second tap on it within 4 seconds goes ahead.
+  function confirmTap(btn, label) {
+    if (btn.getAttribute("data-armed") === "1") return true;
+    var html = btn.innerHTML, aria = btn.getAttribute("aria-label");
+    btn.setAttribute("data-armed", "1");
+    btn.classList.add("is-armed");
+    btn.textContent = label || "Remove?";
+    btn.setAttribute("aria-label", (label || "Remove?") + " Tap again to confirm.");
+    window.setTimeout(function () {
+      if (btn.getAttribute("data-armed") !== "1") return;
+      btn.removeAttribute("data-armed");
+      btn.classList.remove("is-armed");
+      btn.innerHTML = html;
+      if (aria) btn.setAttribute("aria-label", aria); else btn.removeAttribute("aria-label");
+    }, 4000);
+    return false;
+  }
+  function trashToast(what) { showToast(what + " — you can restore it for 30 days in Privacy → Recently Deleted."); }
 
   /* ------------------------------------------------------------------ */
   /* Add Moment capture — real photo/video selection, real voice         */
@@ -4781,12 +4917,11 @@
         return;
       }
       var id = memoryViewState.id;
-      // The record goes first. The file is removed only once nothing saved points to it.
-      if (!mutate(function (db) { db.memories = db.memories.filter(function (m) { return !(m.id === id && m.by === ME); }); })) return;
-      if (!DB.memories.some(function (m) { return m.id === id; })) { idbDeleteMedia(id); idbDeleteKeys(["orig:" + id]); delete MEDIA_URLS[id]; }
+      // Into Recently Deleted; its photo is kept until it's cleared for good.
+      if (!mutate(function (db) { moveToTrash(db, "memories", function (m) { return m.id === id && m.by === ME; }); })) return;
       renderMemoryTimeline();
       closeOverlay("memoryOverlay");
-      showToast("Removed from Our Story.");
+      trashToast("Removed from Our Story");
     });
   }
 
@@ -5007,8 +5142,9 @@
       list.addEventListener("click", function (e) {
         var removeBtn = e.target.closest("[data-remove-date]");
         if (removeBtn) {
+          if (!confirmTap(removeBtn)) return;
           var id = removeBtn.getAttribute("data-remove-date");
-          mutate(function (db) { db.dates = db.dates.filter(function (d) { return !(d.id === id && (!d.by || d.by === ME)); }); });
+          if (mutate(function (db) { moveToTrash(db, "dates", function (d) { return d.id === id && (!d.by || d.by === ME); }); })) trashToast("Date removed");
           renderImportantDates();
           return;
         }
@@ -5284,8 +5420,9 @@
         });
         if (nowDone && sdSaved) showToast("Done together — that one's yours now.");
       } else if (r) {
+        if (!confirmTap(r)) return;
         var rid = r.getAttribute("data-someday-remove");
-        mutate(function (db) { db.someday = db.someday.filter(function (x) { return !(x.id === rid && x.by === ME); }); });
+        if (mutate(function (db) { moveToTrash(db, "someday", function (x) { return x.id === rid && x.by === ME; }); })) trashToast("Removed");
       } else return;
       renderSomeday();
     });
@@ -6212,9 +6349,9 @@
     });
     document.getElementById("plansList").addEventListener("click", function (e) {
       var r = e.target.closest("[data-plan-remove]");
-      if (!r) return;
+      if (!r || !confirmTap(r)) return;
       var id = r.getAttribute("data-plan-remove");
-      mutate(function (db) { db.plans = db.plans.filter(function (x) { return !(x.id === id && x.by === ME); }); });
+      if (mutate(function (db) { moveToTrash(db, "plans", function (x) { return x.id === id && x.by === ME; }); })) trashToast("Plan removed");
       renderPlans();
     });
     // While the app is open: one gentle heads-up 15 minutes before a plan.
@@ -7332,7 +7469,9 @@
   }
   window.addEventListener("storage", function (e) {
     if (e.key !== SHARED_KEY) return;
-    var prev = DB;
+    // With what was in Recently Deleted, so something brought back from
+    // there isn't announced as newly added.
+    var prev = withTrash(DB);
     DB = readShared();
     if (RECOVERY) { showRecoveryScreen(); return; }
     replayLostOps();
@@ -8128,6 +8267,7 @@
         // there's nothing to restore from: the server already keeps it.
         ? '<div class="danger-row"><div class="copy"><span class="title">Kept safe on Pairlum\'s server</span><span class="sub">Your space is saved for both of you as you go, so there\'s nothing to restore from a file. Export still gives you your own full copy.</span></div></div>'
         : '<div class="danger-row"><div class="copy"><span class="title">Restore from a backup</span><span class="sub">Put back an export you downloaded earlier.</span></div><button class="btn-ghost" id="privacyRestoreBtn" type="button">Restore</button></div>') +
+      '<div class="danger-row"><div class="copy"><span class="title">Recently Deleted</span><span class="sub">' + escapeHtml(trashSummary()) + '</span></div><button class="btn-ghost" id="privacyTrashBtn" type="button">Open →</button></div>' +
       '<div class="danger-row"><div class="copy"><span class="title">Delete my account</span><span class="sub">Permanently removes your access. Always confirmed first.</span></div><button class="btn-danger" id="privacyDeleteBtn" type="button">Delete →</button></div>' +
       '</div>';
 
@@ -8161,6 +8301,65 @@
     var restoreBtn = document.getElementById("privacyRestoreBtn");
     if (restoreBtn) restoreBtn.addEventListener("click", renderRestorePanel);
     document.getElementById("privacyDeleteBtn").addEventListener("click", renderDeleteConfirm);
+    document.getElementById("privacyTrashBtn").addEventListener("click", renderTrashPanel);
+  }
+
+  /* Privacy → Recently Deleted: what you removed in the last 30 days.
+     Restore puts it back for both of you; Delete now clears it for good. */
+  function trashSummary() {
+    var n = myTrash().length;
+    return n ? n + (n === 1 ? " thing" : " things") + " you removed, kept for 30 days in case you change your mind."
+      : "Nothing here. What you remove is kept for 30 days in case you change your mind.";
+  }
+  function trashEntryLabel(t) {
+    var it = t.item || {}, title;
+    var kinds = { memories: "Memory", dates: "Date", someday: "Someday", plans: "Plan", chapters: "Chapter", "dna.rituals": "Ritual", "dna.collections": "Collection" };
+    if (t.list === "memories") title = it.caption || ((it.type === "video" ? "A clip" : "A photo") + (validIso(it.date) ? " from " + dayLabel(it.date) : ""));
+    else if (t.list === "dna.collections") title = (it.emoji ? it.emoji + " " : "") + (it.name || "A collection");
+    else title = it.title || it.text || it.name || "Untitled";
+    var kind = kinds[t.list];
+    if (t.list === "collitem") { var c = collectionIn(DB, t.parent); kind = c ? "In " + c.name : "Collection entry"; }
+    return { kind: kind || "Removed", title: title };
+  }
+  function renderTrashPanel() {
+    var body = document.getElementById("privacyBody");
+    var list = myTrash();
+    var html = '<div class="confirm-panel">' +
+      '<button class="overlay-back" type="button" id="trashBack">← Back</button>' +
+      '<h4>Recently Deleted</h4>' +
+      '<p class="body-s">What you remove waits here for 30 days, hidden from both of you, in case you change your mind. Then it is cleared for good, with its photo.</p>';
+    if (!list.length) html += '<p class="privacy-note">Nothing here.</p>';
+    else html += '<ul class="trash-list">' + list.map(function (t) {
+      var l = trashEntryLabel(t);
+      var left = Math.max(1, Math.ceil(((t.item.deletedAt || 0) + TRASH_MS - Date.now()) / 86400000));
+      var ref = ' data-trash-list="' + escapeHtml(t.list) + '" data-trash-id="' + escapeHtml(t.item.id) + '"';
+      return '<li class="trash-row"><div class="copy"><span class="eyebrow">' + escapeHtml(l.kind) + '</span>' +
+        '<span class="title">' + escapeHtml(l.title) + '</span>' +
+        '<span class="sub">Removed ' + escapeHtml(agoLabel(t.item.deletedAt || 0)) + ' · cleared for good in ' + left + (left === 1 ? " day" : " days") + '</span></div>' +
+        '<div class="trash-actions"><button type="button" class="btn-ghost" data-trash-restore' + ref + '>Restore</button>' +
+        '<button type="button" class="btn-danger" data-trash-forget' + ref + '>Delete now</button></div></li>';
+    }).join("") + '</ul>';
+    body.innerHTML = html + '</div>';
+    document.getElementById("trashBack").addEventListener("click", renderPrivacyMain);
+    body.querySelectorAll("[data-trash-restore]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var listName = btn.getAttribute("data-trash-list"), id = btn.getAttribute("data-trash-id"), back = false;
+        if (!mutate(function (db) { back = restoreFromTrash(db, listName, id); })) return;
+        if (back) { refreshEverything(); showToast("Restored — it's back where it was, for both of you."); }
+        else showToast("Its collection was cleared for good, so this can't come back.", true);
+        renderTrashPanel();
+      });
+    });
+    body.querySelectorAll("[data-trash-forget]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (!confirmTap(btn, "Tap again to delete for good")) return;
+        var listName = btn.getAttribute("data-trash-list"), id = btn.getAttribute("data-trash-id"), gone = [];
+        if (!mutate(function () { gone = takeFromTrash(function (t) { return t.list === listName && t.item.id === id && t.item.deletedBy === ME; }); })) return;
+        forgetTrashedFiles(gone);
+        showToast("Deleted for good.");
+        renderTrashPanel();
+      });
+    });
   }
 
   function renderDevicesList() {
@@ -9384,6 +9583,7 @@
       DB.requests.forEach(function (x) { if (x.by === ME && x.hasVoice) mineMedia.push(x.id); });
       DB.moments.forEach(function (x) { if (x.by === ME && x.voice && x.voice.id) mineMedia.push(x.voice.id); });
       DB.replies.forEach(function (x) { if (x.by === ME && x.hasMedia !== false) mineMedia.push(x.id); });
+      TRASH.forEach(function (t) { if (t.list === "memories" && t.item.by === ME && !t.item.demo) { mineMedia.push(t.item.id); if (t.item.hasOriginal) mineMedia.push("orig:" + t.item.id); } });
       var myRecordings = allRecordings().filter(function (r) { return r.by === ME; }).map(function (r) { return r.recId; });
       if (DB.comfort && DB.comfort[ME]) mineMedia.push(DB.comfort[ME].id);
       if (DB.ambient[ME]) mineMedia.push(DB.ambient[ME].id);
@@ -9404,6 +9604,10 @@
         ["feel", "dq", "hearts", "reacts"].forEach(function (k) {
           Object.keys(db[k]).forEach(function (key) { if (db[k][key] && typeof db[k][key] === "object") delete db[k][key][ME]; });
         });
+        // Recently Deleted: what I removed of theirs goes back to them; the
+        // rest I removed, and my own things in there, are cleared for good.
+        myTrash().filter(function (t) { return t.item.by === THEM; }).forEach(function (t) { restoreFromTrash(db, t.list, t.item.id); });
+        takeFromTrash(function (t) { return t.item.deletedBy === ME || (t.item.by === ME && SHARED_ARRAYS.indexOf(t.list) > -1); });
         db.epoch = (db.epoch || 0) + 1;
       }, { evenIfPaused: true });
       if (!removed) {
@@ -11103,23 +11307,22 @@
         petalBurst(hit, 6);
         if (rname) showToast("Kept: " + rname + ".");
       } else if ((hit = t.closest("[data-ritual-remove]"))) {
+        if (!confirmTap(hit)) return;
         var rr = hit.getAttribute("data-ritual-remove");
-        mutateDna(function (d) { d.rituals = d.rituals.filter(function (x) { return !(x.id === rr && x.by === ME); }); });
+        if (mutateDna(function (d) { moveToTrash({ dna: d }, "dna.rituals", function (x) { return x.id === rr && x.by === ME; }); })) trashToast("Ritual removed");
       } else if ((hit = t.closest("[data-coll-open]"))) {
         dnaState.collection = hit.getAttribute("data-coll-open");
       } else if (t.closest("[data-coll-back]")) {
         dnaState.collection = null;
       } else if ((hit = t.closest("[data-coll-item-remove]"))) {
+        if (!confirmTap(hit)) return;
         var ci = hit.getAttribute("data-coll-item-remove");
-        mutateDna(function (d) {
-          var c = d.collections.filter(function (x) { return x.id === dnaState.collection; })[0];
-          if (c) c.items = (c.items || []).filter(function (x) { return !(x.id === ci && x.by === ME); });
-        });
+        if (mutateDna(function (d) { moveToTrash({ dna: d }, "collitem", function (x) { return x.id === ci && x.by === ME; }, dnaState.collection); })) trashToast("Removed");
       } else if ((hit = t.closest("[data-coll-remove]"))) {
+        if (!confirmTap(hit, "Tap again to delete this collection")) return;
         var cr = hit.getAttribute("data-coll-remove");
-        mutateDna(function (d) { d.collections = d.collections.filter(function (x) { return !(x.id === cr && x.by === ME); }); });
+        if (mutateDna(function (d) { moveToTrash({ dna: d }, "dna.collections", function (x) { return x.id === cr && x.by === ME; }); })) trashToast("Collection deleted");
         dnaState.collection = null;
-        showToast("Collection deleted.");
       } else if ((hit = t.closest("[data-learn]"))) {
         var lkind = hit.getAttribute("data-learn"), dir = Number(hit.getAttribute("data-dir"));
         mutateMyDna(function (mine) { mine.fb[lkind] = Math.max(-3, Math.min(3, (mine.fb[lkind] || 0) + dir)); });
@@ -11557,6 +11760,7 @@
     buildWaveform(document.getElementById("needWaveform"), 40);
 
     recordMyTimeZone();
+    purgeExpiredTrash();
 
     // Arrived through a partner's invite link: show the invitation (or what's
     // wrong with it) straight away, instead of a "paused" Home with a button
