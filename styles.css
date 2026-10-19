@@ -1006,6 +1006,14 @@ ul{margin:0;padding:0;list-style:none}
   transition:opacity var(--dur-fast) var(--ease),transform var(--dur-fast) var(--ease);
 }
 .toast.is-shown{opacity:1;transform:translateX(-50%) translateY(0)}
+/* "Not saved yet" — small and steady at the top, never in the way */
+.save-pill{
+  position:fixed;left:50%;transform:translateX(-50%);z-index:89;
+  top:calc(10px + env(safe-area-inset-top, 0px));max-width:calc(100vw - 32px);
+  padding:7px 14px;border-radius:999px;background:var(--wine-deep);color:#fff;
+  box-shadow:var(--shadow-2);font-family:var(--font-ui);font-size:.78rem;line-height:1.35;text-align:center;
+}
+.save-pill[hidden]{display:none}
 
 /* I Need You reveal — intimate, not a category confirmation screen */
 .need-reveal{background:var(--wine-deep);color:#fff}

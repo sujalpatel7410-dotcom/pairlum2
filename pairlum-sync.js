@@ -47,7 +47,10 @@ window.PairlumSync = (function(){
   var cfgHours = Number((window.PAIRLUM_CONFIG || {}).inviteValidHours);
   var INVITE_VALID_HOURS = cfgHours >= 1 && cfgHours <= 168 ? cfgHours : 48;
 
-  var state = { spaceId: null, role: null, myId: null, serverRev: 0, applyingRemote: false, sub: null, inviteId: null, offerToken: null };
+  // knownOps: the change ids (app.js's "ops") in the newest copy this device
+  // knows the server has — so a clash can tell which changes were this
+  // device's own, unsaved ones.
+  var state = { spaceId: null, role: null, myId: null, serverRev: 0, knownOps: [], applyingRemote: false, sub: null, inviteId: null, offerToken: null };
 
   function readJson(key){ try{ return JSON.parse(rawGetItem(key) || "null"); }catch(e){ return null; } }
   function forget(key){ try{ localStorage.removeItem(key); }catch(e){} }
@@ -78,6 +81,7 @@ window.PairlumSync = (function(){
   function applyRemoteSpace(row){
     if(!row) return;
     state.serverRev = row.rev;
+    state.knownOps = (row.data && row.data.ops) || [];
     writeLocal(SHARED_KEY, JSON.stringify(row.data));
     dispatchStorage(SHARED_KEY, JSON.stringify(row.data));
   }
@@ -89,29 +93,123 @@ window.PairlumSync = (function(){
     dispatchStorage(PAIRING_KEY, json);
   }
 
+  // ---- save status: what happened to this device's latest change ----------
+  // app.js shows it (event "pairlum:save", or PairlumSpace.saveState()):
+  //   saving  — on its way to the server
+  //   saved   — the server has everything this device has
+  //   waiting — the server couldn't be reached; kept on this device and tried
+  //             again after 2s, 5s, 15s, 30s, then every minute, and as soon
+  //             as the device is back online
+  //   refused — the server won't take it (e.g. no longer an active member);
+  //             not retried until the next change. `message` says why.
+  // plus a one-off `notice` on the event:
+  //   adjusted — saved, but the server put back part of it that belongs to
+  //              the other person (schema.sql's guard); this device now shows
+  //              what is really stored
+  //   lost     — the partner saved at the same moment and this device could
+  //              no longer re-apply some changes on top of theirs
+  var save = { state: "saved", at: 0, message: "" };
+  function setSave(s, extra){
+    extra = extra || {};
+    if(save.state === s && !extra.notice && !extra.message) return;
+    save = { state: s, at: Date.now(), message: extra.message || "" };
+    var detail = { state: s, at: save.at, message: save.message, notice: extra.notice || null };
+    try{ window.dispatchEvent(new CustomEvent("pairlum:save", { detail: detail })); }catch(e){}
+  }
+  // The server's row for a save that landed (null/no rev = revision clash).
+  function landed(row){ return !!(row && typeof row === "object" && row.rev !== null && row.rev !== undefined); }
+  function sameJson(a, b){
+    if(a === b) return true;
+    if(!a || !b || typeof a !== "object" || typeof b !== "object" || Array.isArray(a) !== Array.isArray(b)) return false;
+    var ka = Object.keys(a), kb = Object.keys(b);
+    if(ka.length !== kb.length) return false;
+    for(var i = 0; i < ka.length; i++){
+      if(!Object.prototype.hasOwnProperty.call(b, ka[i]) || !sameJson(a[ka[i]], b[ka[i]])) return false;
+    }
+    return true;
+  }
+  // What was stored vs what was sent. The plan ("membership") is always the
+  // server's own (schema.sql), so it doesn't count as a change.
+  function storedAsSent(stored, sent){
+    var a = Object.assign({}, stored || {}), b = Object.assign({}, sent || {});
+    delete a.membership; delete b.membership;
+    return sameJson(a, b);
+  }
+  // app.js stamps every change with an id in `ops` (see its mutate()).
+  // Ids in `list` that `rec` doesn't have.
+  function opsMissing(list, rec){
+    var have = (rec && Array.isArray(rec.ops)) ? rec.ops : [];
+    return (list || []).filter(function(id){ return have.indexOf(id) === -1; });
+  }
+
   // ---- outbound: app.js's own writeShared() calls localStorage.setItem ----
   var pendingTimer = null, DEBOUNCE_MS = 350;
+  var flight = null, again = false;            // one save on its way at a time
+  var retryTimer = null, retryN = 0, RETRY_MS = [2000, 5000, 15000, 30000, 60000];
   function schedulePush(){
     if(pendingTimer) clearTimeout(pendingTimer);
     pendingTimer = setTimeout(flushPush, DEBOUNCE_MS);
+    if(save.state !== "waiting") setSave("saving");
+  }
+  function scheduleRetry(){
+    if(retryTimer) clearTimeout(retryTimer);
+    retryTimer = setTimeout(flushPush, RETRY_MS[Math.min(retryN, RETRY_MS.length - 1)]);
+    retryN++;
+  }
+  // One attempt to save what this device holds right now. Resolves to
+  // "saved", "adjusted", "clash", "lost", "waiting", or { refused: message }.
+  function pushOnce(){
+    var raw = state.spaceId ? rawGetItem(SHARED_KEY) : null;
+    if(!raw) return Promise.resolve("saved");
+    var data; try{ data = JSON.parse(raw); }catch(e){ return Promise.resolve("saved"); }
+    // This device's changes since the server last confirmed anything.
+    var mine = opsMissing(data.ops, { ops: state.knownOps });
+    return B.writeSpaceData(state.spaceId, data, state.serverRev).then(function(row){
+      if(landed(row)){
+        state.serverRev = row.rev;
+        state.knownOps = (row.data && row.data.ops) || [];
+        if(storedAsSent(row.data, data)) return "saved";
+        applyRemoteSpace(row); // show what is really stored
+        return "adjusted";
+      }
+      // Clash: the partner's save landed first. Pull theirs in through the
+      // normal "storage" event path — app.js's replayLostOps() re-applies
+      // this device's own changes on top of it (synchronously, inside that
+      // event), and its writeShared() lands back in schedulePush(). Any of
+      // mine it couldn't re-apply are lost, and the person is told.
+      return B.fetchSpace(state.spaceId).then(function(fresh){
+        applyRemoteSpace(fresh);
+        return opsMissing(opsMissing(mine, fresh && fresh.data), readJson(SHARED_KEY)).length ? "lost" : "clash";
+      });
+    }).then(null, function(err){
+      // The server answered "no" (a rule in write_space_data): retrying the
+      // same save can't help. Anything else (offline, timeout) is retried.
+      if(err && err.code === "P0001") return { refused: err.message || "The server didn't accept that change." };
+      return "waiting";
+    });
   }
   function flushPush(){
     pendingTimer = null;
-    if(!state.spaceId) return;
-    var raw = rawGetItem(SHARED_KEY);
-    if(!raw) return;
-    var data; try{ data = JSON.parse(raw); }catch(e){ return; }
-    B.writeSpaceData(state.spaceId, data, state.serverRev).then(function(row){
-      if(row){ state.serverRev = row.rev; return; }
-      // Conflict: someone else's write landed first. Pull the authoritative
-      // row in through the normal "storage" event path — app.js's own
-      // replayLostOps() (see app.js:566-574) will reapply this tab's recent
-      // changes on top of it and writeShared() will run again naturally,
-      // which this same patched setItem will then push on the next tick.
-      return B.fetchSpace(state.spaceId).then(applyRemoteSpace);
-    }).catch(function(err){
-      console.warn("Pairlum sync: couldn't reach the server, will retry on the next change.", err);
+    if(retryTimer){ clearTimeout(retryTimer); retryTimer = null; }
+    if(!state.spaceId) return Promise.resolve("saved");
+    if(flight){ again = true; return flight; }
+    flight = pushOnce().then(function(res){
+      flight = null;
+      if(res === "waiting"){ again = false; setSave("waiting"); scheduleRetry(); return res; }
+      retryN = 0;
+      if(res && res.refused){ again = false; setSave("refused", { message: res.refused }); return res; }
+      if(res === "adjusted" || res === "lost") setSave("saving", { notice: res });
+      // More to send: changed meanwhile, or re-applied on top of the
+      // partner's version after a clash (which scheduled a push).
+      if(again || pendingTimer){
+        again = false;
+        if(pendingTimer){ clearTimeout(pendingTimer); pendingTimer = null; }
+        return flushPush().then(function(){ return res; });
+      }
+      setSave("saved");
+      return res;
     });
+    return flight;
   }
   // Push the shared record right now instead of after the usual short pause,
   // and say whether it landed. On a clash with the partner's change, pull
@@ -119,13 +217,24 @@ window.PairlumSync = (function(){
   function pushNow(){
     if(pendingTimer){ clearTimeout(pendingTimer); pendingTimer = null; }
     if(!state.spaceId) return Promise.resolve(true);
-    var raw = rawGetItem(SHARED_KEY);
-    if(!raw) return Promise.resolve(true);
-    var data; try{ data = JSON.parse(raw); }catch(e){ return Promise.resolve(false); }
-    return B.writeSpaceData(state.spaceId, data, state.serverRev).then(function(row){
-      if(row){ state.serverRev = row.rev; return true; }
-      return B.fetchSpace(state.spaceId).then(applyRemoteSpace).then(function(){ return false; });
+    var wait = flight || Promise.resolve();
+    return wait.then(function(){
+      if(flight) return pushNow();
+      flight = pushOnce();
+      return flight.then(function(res){
+        flight = null;
+        // Anything changed while this was on its way goes out the usual way.
+        if(again){ again = false; schedulePush(); }
+        if(res && res.refused){ setSave("refused", { message: res.refused }); throw new Error(res.refused); }
+        if(res === "waiting"){ setSave("waiting"); scheduleRetry(); throw new Error("Couldn't reach Pairlum. Check your connection and try again."); }
+        if(res === "adjusted" || res === "lost") setSave(pendingTimer ? "saving" : "saved", { notice: res });
+        else if(!pendingTimer) setSave("saved");
+        return res === "saved" || res === "adjusted";
+      });
     });
+  }
+  function installSaveRetries(){
+    try{ window.addEventListener("online", function(){ if(save.state === "waiting") flushPush(); }); }catch(e){}
   }
   function installOutboundHook(){
     localStorage.setItem = function(key, value){
@@ -139,6 +248,9 @@ window.PairlumSync = (function(){
   // ---- inbound: realtime ----
   function installRealtime(){
     state.sub = B.subscribeSpace(state.spaceId, function(row){
+      // Realtime can deliver an older version after a newer one this device
+      // already has (e.g. the echo of an earlier save): skip it.
+      if(row && row.rev < state.serverRev) return;
       applyRemoteSpace(row);
     }, function(memberRow){
       // The partner just accepted the invite: tell app.js's pairing listener.
@@ -369,6 +481,9 @@ window.PairlumSync = (function(){
     inviteTokenFrom: inviteTokenFrom,
     // The space's plan as last fetched from the server: { known, plan, at }.
     plan: function(){ return readJson(PLAN_KEY); },
+    // Whether this device's latest change has reached the server:
+    // { state: "saving" | "saved" | "waiting" | "refused", at, message }.
+    saveState: function(){ return { state: save.state, at: save.at, message: save.message }; },
     // A link (or token) pasted into the pairing screen goes through exactly
     // the same path as one opened from a message: keep it, reload, and let
     // boot() show the "Join our Pairlum?" confirmation with the inviter's
@@ -576,6 +691,7 @@ window.PairlumSync = (function(){
     var paired = false;
     return B.fetchSpace(state.spaceId).then(function(row){
       state.serverRev = row.rev;
+      state.knownOps = (row.data && row.data.ops) || [];
       writeLocal(SHARED_KEY, JSON.stringify(row.data));
       // The plan is fetched before app.js loads (it reads it synchronously).
       // refreshPlan never rejects, so a slow or failed check can't block boot.
@@ -608,6 +724,7 @@ window.PairlumSync = (function(){
       }
       installRealtime();
       installMediaRetries();
+      installSaveRetries();
       return { configured: true, hasSpace: true };
     });
   }

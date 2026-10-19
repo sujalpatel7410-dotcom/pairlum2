@@ -506,7 +506,8 @@
     if (!Array.isArray(db.ops)) db.ops = [];             // ids of recent changes, so a lost one can be noticed
     if (!Array.isArray(db.mediaGens)) db.mediaGens = []; // media sets written by a restore, newest first
     // Membership covers the shared space, so it lives in the shared record.
-    if (db.membership === undefined) db.membership = { plan: "digital", since: "2026-03-12", demo: true };
+    // Demo only: a real account's plan comes from the server (membership()).
+    if (db.membership === undefined && !isRealBackend()) db.membership = { plan: "digital", since: "2026-03-12", demo: true };
     return db;
   }
   var RECOVERY = null; // set when the stored space could not be read; nothing is written while it is set
@@ -613,7 +614,10 @@
   // older copy: apply it again, once.
   function replayLostOps() {
     var now = Date.now(), epoch = DB.epoch || 0, redone = 0;
-    RECENT_OPS = RECENT_OPS.filter(function (op) { return now - op.at < OPS_REPLAY_MS && op.epoch === epoch; }); // a restore starts a new epoch
+    // With a real server, a change is kept for re-applying until the server
+    // has it, however long that takes (e.g. made offline an hour ago).
+    var unsaved = isRealBackend() && window.PairlumSpace.saveState && window.PairlumSpace.saveState().state !== "saved";
+    RECENT_OPS = RECENT_OPS.filter(function (op) { return (unsaved || now - op.at < OPS_REPLAY_MS) && op.epoch === epoch; }); // a restore starts a new epoch
     RECENT_OPS.slice().forEach(function (op) {
       if (DB.ops.indexOf(op.id) > -1) return;
       if (mutate(op.fn, { evenIfPaused: op.evenIfPaused, _replayId: op.id })) redone++;
@@ -7362,6 +7366,40 @@
   // The space's plan changed on the server (pairlum-sync.js): Book status,
   // founder access and the membership screen follow it straight away.
   window.addEventListener("pairlum:plan", function () { renderMore(); });
+  // Whether your latest change has reached the server (pairlum-sync.js).
+  // Quiet while saves land; says so plainly when one hasn't, so a "Sent"
+  // never stands on its own when nothing was stored.
+  var savePillTimer = null;
+  function setSavePill(text) {
+    var pill = document.getElementById("savePill");
+    if (!pill) return;
+    pill.textContent = text || "";
+    pill.hidden = !text;
+  }
+  window.addEventListener("pairlum:save", function (e) {
+    var d = (e && e.detail) || {};
+    var partnerName = (SPACE.partner && SPACE.partner.name) || "your partner";
+    if (d.notice === "adjusted") {
+      saveFailedAt = Date.now();
+      showToast("Part of that change wasn't saved — only the person who added something can change or remove it.", true);
+    } else if (d.notice === "lost") {
+      saveFailedAt = Date.now();
+      showToast("Some of your changes couldn't be saved because " + partnerName + " changed the same things at the same time. Please check and try again.", true);
+    }
+    window.clearTimeout(savePillTimer);
+    if (d.state === "waiting") {
+      setSavePill(navigator.onLine === false ? "Offline — your changes are kept on this device and will save when you're back." : "Not saved yet — trying again…");
+    } else if (d.state === "refused") {
+      saveFailedAt = Date.now();
+      var why = String(d.message || "").trim();
+      showToast("That change couldn't be saved." + (why ? " " + why.charAt(0).toUpperCase() + why.slice(1) : ""), true);
+      setSavePill("Your last change wasn't saved.");
+    } else if (d.state === "saving") {
+      savePillTimer = window.setTimeout(function () { setSavePill("Saving…"); }, 2500); // only when it's slow
+    } else {
+      setSavePill("");
+    }
+  });
 
   // Two-partner preview: which partner this tab is. A real login replaces this.
   function wireViewingAs() {

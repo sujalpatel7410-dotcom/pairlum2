@@ -73,7 +73,12 @@ exception when duplicate_object then null; end $$;
 
 -- The shared record can no longer carry a plan the app wrote itself: keep
 -- whatever is stored, ignore what's sent. (Same function as before
--- otherwise — active member + revision check.)
+-- otherwise — active member + revision check.) Skipped once the newer guard
+-- (20261019140000_guard.sql) is installed, so running this file again later
+-- never puts back the older, unguarded version.
+do $do$ begin
+  if to_regproc('public.guard_space_data') is not null then return; end if;
+  execute $fn$
 create or replace function public.write_space_data(target_space uuid, new_data jsonb, expected_rev integer)
 returns public.spaces language plpgsql security definer set search_path = public as $$
 declare
@@ -91,6 +96,8 @@ begin
   return result;
 end;
 $$;
+  $fn$;
+end $do$;
 
 create or replace function public.create_space(seed jsonb)
 returns public.spaces language plpgsql security definer set search_path = public as $$

@@ -42,6 +42,20 @@ what it changes; they're safe to run twice and don't delete existing data.
   preview is gone in real accounts; until payments exist, the membership
   screen says plans open soon. To give a test space a plan by hand, see the
   comment at the top of that file.
+- `20261019140000_guard.sql` — the server now enforces who may change what
+  in the shared record, instead of trusting the app. Once both of you have
+  joined, neither can edit, remove or re-credit the other's moments, notes,
+  letters, replies, plans, dates, rituals or collections, add something in
+  the other's name, or change the other's profile, settings, feelings,
+  answers, hearts or recording write-ups. What the app itself lets you do to
+  each other's things still works: tick a Someday item, answer an I Need You
+  request, edit or remove a chapter, mark a ritual kept, add to a
+  collection. A save that breaks a rule isn't thrown away: just those pieces
+  are put back and the rest is saved, and the app says "Part of that change
+  wasn't saved". The app also shows "Not saved yet" when a change hasn't
+  reached the server (offline, or the server refused it) and retries on its
+  own. Adds helper functions and replaces `write_space_data`; no data
+  changes.
 
 ## 3. Turn on Realtime (usually already on)
 
