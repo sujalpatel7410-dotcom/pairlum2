@@ -869,14 +869,17 @@
   function mediaGens() { return (typeof DB !== "undefined" && DB && Array.isArray(DB.mediaGens)) ? DB.mediaGens : []; }
   function mediaKeys(id) { return mediaGens().map(function (g) { return g + ":" + id; }).concat([id]); }
   function mediaWriteKey(id) { var g = mediaGens()[0]; return g ? g + ":" + id : id; }
-  function idbPutMedia(id, blob, cb) {
+  // opts.cacheOnly: keep a copy on this device without uploading it — for a
+  // file just downloaded from the partner (it's already in the cloud, and
+  // only its uploader may replace it there).
+  function idbPutMedia(id, blob, cb, opts) {
     withMediaDB(function (err, db) {
       if (err) { if (cb) cb(err); return; }
       try {
         if (window.__pairlumTestFailMediaPut && window.__pairlumTestFailMediaPut(id)) throw new Error("test: media write refused");
         var tx = db.transaction(IDB_STORE, "readwrite");
         tx.objectStore(IDB_STORE).put(blob, mediaWriteKey(id));
-        tx.oncomplete = function () { if (window.PairlumMediaBridge) window.PairlumMediaBridge.upload(id, blob); if (cb) cb(null); };
+        tx.oncomplete = function () { if (window.PairlumMediaBridge && !(opts && opts.cacheOnly)) window.PairlumMediaBridge.upload(id, blob); if (cb) cb(null); };
         tx.onerror = tx.onabort = function () { if (cb) cb(tx.error || new Error("save failed")); };
       } catch (e) { if (cb) cb(e); }
     });
@@ -964,7 +967,7 @@
     if (!window.PairlumMediaBridge) return cb(null, null);
     window.PairlumMediaBridge.download(id, function (err, blob) {
       if (err || !blob) return cb(null, null);
-      idbPutMedia(id, blob, function () { });
+      idbPutMedia(id, blob, function () { }, { cacheOnly: true });
       cb(null, blob);
     });
   }
@@ -8077,7 +8080,12 @@
 
     html += '<div class="overlay-section"><div class="overlay-section-head"><h4>Your data</h4></div>' +
       '<div class="danger-row"><div class="copy"><span class="title">Export your Pairlum</span><span class="sub">Download everything in your space as one .zip file, photos, videos and voice included.</span></div><button class="btn-ghost" id="privacyExportBtn" type="button">Export</button></div>' +
-      '<div class="danger-row"><div class="copy"><span class="title">Restore from a backup</span><span class="sub">Put back an export you downloaded earlier.</span></div><button class="btn-ghost" id="privacyRestoreBtn" type="button">Restore</button></div>' +
+      (isRealBackend()
+        // Restoring a file would replace the shared record for both of you,
+        // newer things your partner added included — so with a real backend
+        // there's nothing to restore from: the server already keeps it.
+        ? '<div class="danger-row"><div class="copy"><span class="title">Kept safe on Pairlum\'s server</span><span class="sub">Your space is saved for both of you as you go, so there\'s nothing to restore from a file. Export still gives you your own full copy.</span></div></div>'
+        : '<div class="danger-row"><div class="copy"><span class="title">Restore from a backup</span><span class="sub">Put back an export you downloaded earlier.</span></div><button class="btn-ghost" id="privacyRestoreBtn" type="button">Restore</button></div>') +
       '<div class="danger-row"><div class="copy"><span class="title">Delete my account</span><span class="sub">Permanently removes your access. Always confirmed first.</span></div><button class="btn-danger" id="privacyDeleteBtn" type="button">Delete →</button></div>' +
       '</div>';
 
@@ -8108,7 +8116,8 @@
       openOverlay("pairingOverlay");
     });
     document.getElementById("privacyExportBtn").addEventListener("click", renderExportPanel);
-    document.getElementById("privacyRestoreBtn").addEventListener("click", renderRestorePanel);
+    var restoreBtn = document.getElementById("privacyRestoreBtn");
+    if (restoreBtn) restoreBtn.addEventListener("click", renderRestorePanel);
     document.getElementById("privacyDeleteBtn").addEventListener("click", renderDeleteConfirm);
   }
 
@@ -9110,6 +9119,7 @@
      be put back; (3) the saved record, in one write. If any step fails, the
      earlier ones are undone and the space is exactly as it was. */
   function commitRestore(checked, onStep, done) {
+    if (isRealBackend()) return done("Your space is kept on Pairlum's server, so it can't be replaced from a file — that would also undo things your partner added.");
     var data = checked.data, files = checked.files;
     var gen = "g" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
     var cur = RECOVERY ? null : readShared();
@@ -9253,15 +9263,24 @@
       '<div class="recovery-step"><h3>1. Keep a copy of what is here</h3>' +
       '<p class="body-s">This saves the unreadable data as a file, so it can be looked at or repaired later.</p>' +
       '<button class="btn-ghost" id="recoveryDownload" type="button">Download the unreadable data</button> <span class="body-s" id="recoveryDownloadNote" aria-live="polite"></span></div>' +
-      '<div class="recovery-step"><h3>2. Restore from a backup</h3>' +
-      '<p class="body-s">If you have a Pairlum export (.zip), choose it here.</p><div id="recoveryRestoreHost"></div></div>' +
-      '<div class="recovery-step"><h3>Or start a new, empty space</h3>' +
-      '<p class="body-s">Only after you have downloaded the copy above. Your old data stays in that file.</p>' +
-      '<button class="btn-danger" id="recoveryFresh" type="button" disabled>Start a new space</button></div>' +
+      (isRealBackend()
+        // With a real backend this device only holds a copy of what the
+        // server keeps; replacing or emptying the shared record from here
+        // would do it for both partners. Fetching it again is the fix.
+        ? '<div class="recovery-step"><h3>2. Fetch your space again</h3>' +
+          '<p class="body-s">Your space is kept on Pairlum\'s server. Reloading fetches a fresh copy of it.</p>' +
+          '<button class="btn-primary" id="recoveryReload" type="button">Reload</button></div>'
+        : '<div class="recovery-step"><h3>2. Restore from a backup</h3>' +
+          '<p class="body-s">If you have a Pairlum export (.zip), choose it here.</p><div id="recoveryRestoreHost"></div></div>' +
+          '<div class="recovery-step"><h3>Or start a new, empty space</h3>' +
+          '<p class="body-s">Only after you have downloaded the copy above. Your old data stays in that file.</p>' +
+          '<button class="btn-danger" id="recoveryFresh" type="button" disabled>Start a new space</button></div>') +
       '<p class="body-s">Need help? Write to pairlum.co@gmail.com.</p>' +
       '</div>';
     document.body.appendChild(box);
-    mountRestoreUi(document.getElementById("recoveryRestoreHost"), "recoveryRestore");
+    var reloadBtn = document.getElementById("recoveryReload");
+    if (reloadBtn) reloadBtn.addEventListener("click", function () { window.location.reload(); });
+    if (document.getElementById("recoveryRestoreHost")) mountRestoreUi(document.getElementById("recoveryRestoreHost"), "recoveryRestore");
     document.getElementById("recoveryDownload").addEventListener("click", function () {
       var blob = new Blob([RECOVERY.raw === null ? "" : RECOVERY.raw], { type: "text/plain" });
       var url = URL.createObjectURL(blob), a = document.createElement("a");
@@ -9270,9 +9289,11 @@
       window.setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
       RECOVERY.downloaded = true;
       setText("recoveryDownloadNote", "Handed to your browser. Look in your Downloads.");
-      document.getElementById("recoveryFresh").disabled = false;
+      var freshBtn = document.getElementById("recoveryFresh");
+      if (freshBtn) freshBtn.disabled = false;
     });
-    document.getElementById("recoveryFresh").addEventListener("click", function () {
+    var freshBtnEl = document.getElementById("recoveryFresh");
+    if (freshBtnEl) freshBtnEl.addEventListener("click", function () {
       if (!RECOVERY.downloaded) return;
       try { localStorage.setItem(SHARED_KEY + ":unreadable-copy", RECOVERY.raw === null ? "" : RECOVERY.raw); } catch (e) { }
       try { localStorage.removeItem(SHARED_KEY); } catch (e) { return; }

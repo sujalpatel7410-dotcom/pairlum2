@@ -28,6 +28,13 @@ what it changes; they're safe to run twice and don't delete existing data.
 - `20261016120000_delete_my_account.sql` — makes Settings → Privacy →
   **Delete my account** actually delete the login (it used to only clear the
   person's content). Adds one function; changes nothing else.
+- `20261019120000_lockdown.sql` — closes three ways around the app's own
+  checks: the shared record can only be changed through `write_space_data`
+  (no direct table writes, not even by someone who left or disconnected);
+  only a file's uploader can replace or delete it; and the live-signal
+  channel ("I Need You" live listening) is private to the couple. **Run this
+  one before loading the updated app** — the app now joins that channel as
+  private, which only works once these rules exist.
 
 ## 3. Turn on Realtime (usually already on)
 
@@ -145,19 +152,21 @@ From this project's folder:
 ```
 npx supabase login
 npx supabase init
-npx supabase link --project-ref ytdzopedclxgwxjapnjc
+npx supabase link --project-ref <your-project-ref>
 npx supabase functions deploy pairlum-understand
 npx supabase secrets set OPENAI_API_KEY=sk-...
+npx supabase secrets set ALLOWED_ORIGINS=http://localhost:8743,https://pairlum.com,https://www.pairlum.com
 ```
 (`login` opens a browser to approve; `link` connects this folder to your
 actual project — the ref is the part of your project URL before
-`.supabase.co`.)
+`.supabase.co`. `ALLOWED_ORIGINS` lists the sites allowed to call the
+function from a browser; those three are also the default if it's unset.)
 
 **d) Point the app at it**
 In `pairlum-config.js`:
 ```js
 understand: {
-  url: "https://ytdzopedclxgwxjapnjc.supabase.co/functions/v1/pairlum-understand"
+  url: "https://<your-project-ref>.supabase.co/functions/v1/pairlum-understand"
 },
 ```
 (`token` is optional now — app.js sends the signed-in user's real session

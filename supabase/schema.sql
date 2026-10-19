@@ -111,7 +111,7 @@ create index if not exists pairing_invites_space_pending_idx on public.pairing_i
 -- RLS policies on other tables can call it without recursive-policy issues.)
 -- ---------------------------------------------------------------------------
 create or replace function public.is_space_member(target_space uuid)
-returns boolean language sql security definer stable as $$
+returns boolean language sql security definer stable set search_path = public as $$
   select exists(
     select 1 from public.space_members
     where space_id = target_space and user_id = auth.uid()
@@ -122,7 +122,7 @@ $$;
 -- and invites, where "a member of this space" alone isn't enough: someone
 -- who stepped away or disconnected can still read history, but not write.
 create or replace function public.is_active_member(target_space uuid)
-returns boolean language sql security definer stable as $$
+returns boolean language sql security definer stable set search_path = public as $$
   select exists(
     select 1 from public.space_members
     where space_id = target_space and user_id = auth.uid() and status = 'active'
@@ -137,11 +137,11 @@ drop policy if exists "members can read their space" on public.spaces;
 create policy "members can read their space" on public.spaces
   for select using (public.is_space_member(id));
 
+-- No insert, update or delete policy: spaces are only ever created via
+-- create_space() and changed via write_space_data() below (security
+-- definer, with their own checks), so a client can never write the row
+-- directly — not even a member who has left or disconnected.
 drop policy if exists "members can update their space" on public.spaces;
-create policy "members can update their space" on public.spaces
-  for update using (public.is_space_member(id));
--- No insert policy: spaces are only ever created via create_space() below
--- (security definer), so a client can never insert an orphan space row.
 
 drop policy if exists "members can read their membership rows" on public.space_members;
 create policy "members can read their membership rows" on public.space_members
@@ -164,7 +164,7 @@ create policy "creator can read own pairing invites" on public.pairing_invites
 -- COMPLETE empty record matching app.js's shape (see pairlum-backend.js's
 -- EMPTY_SPACE constant) so a fresh couple never sees demo content.
 create or replace function public.create_space(seed jsonb)
-returns public.spaces language plpgsql security definer as $$
+returns public.spaces language plpgsql security definer set search_path = public as $$
 declare
   new_space public.spaces;
 begin
@@ -316,7 +316,7 @@ $$;
 -- caller last read. Returns the updated row, or NULL (not an error) on a
 -- conflict — the caller re-fetches the latest row and retries once.
 create or replace function public.write_space_data(target_space uuid, new_data jsonb, expected_rev integer)
-returns public.spaces language plpgsql security definer as $$
+returns public.spaces language plpgsql security definer set search_path = public as $$
 declare
   result public.spaces;
 begin
@@ -337,7 +337,7 @@ $$;
 -- completely unaffected — matches the app's own "Leave" copy ("[partner]
 -- keeps this space exactly as it is — nothing changes on their side").
 create or replace function public.leave_space(target_space uuid)
-returns void language plpgsql security definer as $$
+returns void language plpgsql security definer set search_path = public as $$
 begin
   update public.space_members set status = 'left'
     where space_id = target_space and user_id = auth.uid() and status = 'active';
@@ -350,7 +350,7 @@ $$;
 -- Undo leave_space for the same account. Does nothing to a 'disconnected'
 -- row — disconnecting is terminal, there is no rejoin from it.
 create or replace function public.rejoin_space(target_space uuid)
-returns void language plpgsql security definer as $$
+returns void language plpgsql security definer set search_path = public as $$
 begin
   update public.space_members set status = 'active'
     where space_id = target_space and user_id = auth.uid() and status = 'left';
@@ -366,7 +366,7 @@ $$;
 -- uniqueness guarantee above only applies to 'active' rows — both accounts
 -- are immediately free to create or join a different space.
 create or replace function public.disconnect_space(target_space uuid)
-returns void language plpgsql security definer as $$
+returns void language plpgsql security definer set search_path = public as $$
 begin
   if not public.is_space_member(target_space) then
     raise exception 'not a member of this space';
@@ -403,7 +403,10 @@ end;
 $$;
 
 grant usage on schema public to anon, authenticated;
-grant select, update on public.spaces to authenticated;
+grant select on public.spaces to authenticated;
+-- Supabase grants new tables to anon/authenticated by default; writes go
+-- only through the functions above, so take the table-level write grants away.
+revoke insert, update, delete, truncate on public.spaces, public.space_members, public.pairing_invites from anon, authenticated;
 grant select on public.space_members to authenticated;
 grant select on public.pairing_invites to authenticated;
 grant execute on function public.create_space(jsonb) to authenticated;
@@ -467,18 +470,55 @@ insert into storage.buckets (id, name, public)
   values ('media', 'media', false)
   on conflict (id) do nothing;
 
+-- Anyone in the space can view (history stays readable after stepping away
+-- or disconnecting); only active members can add files; only a file's own
+-- uploader can replace it, or delete it (deleting stays possible after
+-- stepping away, e.g. while deleting your account).
 drop policy if exists "space members can read their media" on storage.objects;
 create policy "space members can read their media" on storage.objects
   for select using (bucket_id = 'media' and public.is_space_member((storage.foldername(name))[1]::uuid));
 
 drop policy if exists "space members can upload their media" on storage.objects;
 create policy "space members can upload their media" on storage.objects
-  for insert with check (bucket_id = 'media' and public.is_space_member((storage.foldername(name))[1]::uuid));
+  for insert with check (bucket_id = 'media' and public.is_active_member((storage.foldername(name))[1]::uuid));
 
 drop policy if exists "space members can overwrite their media" on storage.objects;
 create policy "space members can overwrite their media" on storage.objects
-  for update using (bucket_id = 'media' and public.is_space_member((storage.foldername(name))[1]::uuid));
+  for update
+  using (bucket_id = 'media' and public.is_active_member((storage.foldername(name))[1]::uuid)
+         and (owner_id = auth.uid()::text or owner = auth.uid()))
+  with check (bucket_id = 'media' and public.is_active_member((storage.foldername(name))[1]::uuid)
+         and (owner_id = auth.uid()::text or owner = auth.uid()));
 
 drop policy if exists "space members can delete their media" on storage.objects;
 create policy "space members can delete their media" on storage.objects
-  for delete using (bucket_id = 'media' and public.is_space_member((storage.foldername(name))[1]::uuid));
+  for delete using (bucket_id = 'media' and public.is_space_member((storage.foldername(name))[1]::uuid)
+         and (owner_id = auth.uid()::text or owner = auth.uid()));
+
+-- ---------------------------------------------------------------------------
+-- The live "signal" channel (topic "space-<space id>": "I Need You" live
+-- listening, hold-the-heart) is a private Realtime channel: members who are
+-- active or have stepped away can receive, only active members can send.
+-- ---------------------------------------------------------------------------
+do $$ begin
+  execute 'drop policy if exists "space members can receive live signals" on realtime.messages';
+  execute $p$
+    create policy "space members can receive live signals" on realtime.messages
+      for select to authenticated
+      using (exists (
+        select 1 from public.space_members m
+        where m.user_id = auth.uid() and m.status in ('active', 'left')
+          and realtime.topic() = 'space-' || m.space_id::text))
+  $p$;
+  execute 'drop policy if exists "active space members can send live signals" on realtime.messages';
+  execute $p$
+    create policy "active space members can send live signals" on realtime.messages
+      for insert to authenticated
+      with check (exists (
+        select 1 from public.space_members m
+        where m.user_id = auth.uid() and m.status = 'active'
+          and realtime.topic() = 'space-' || m.space_id::text))
+  $p$;
+exception when undefined_table or invalid_schema_name or undefined_function then
+  raise notice 'Realtime Authorization (realtime.messages) is not available on this project; live-signal channel left as it was.';
+end $$;

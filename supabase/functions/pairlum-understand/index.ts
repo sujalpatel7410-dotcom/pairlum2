@@ -29,11 +29,21 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 
 const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
+// Only Pairlum's own sites may call this from a browser. Override with the
+// ALLOWED_ORIGINS secret (comma-separated) once the real domain is known:
+//   supabase secrets set ALLOWED_ORIGINS=https://pairlum.com,https://www.pairlum.com
+const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "http://localhost:8743,https://pairlum.com,https://www.pairlum.com")
+  .split(",").map((s) => s.trim()).filter(Boolean);
 const CORS = {
-  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, apikey, content-type",
   "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+  "Vary": "Origin",
 };
+function withAllowedOrigin(req: Request, res: Response): Response {
+  const origin = req.headers.get("Origin");
+  if (origin && ALLOWED_ORIGINS.includes(origin)) res.headers.set("Access-Control-Allow-Origin", origin);
+  return res;
+}
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 }
@@ -59,14 +69,21 @@ async function authenticate(req: Request): Promise<string | null> {
   return data.user.id;
 }
 
-async function isSpaceMember(userId: string, spaceId: string): Promise<boolean> {
-  const { data } = await db.from("space_members").select("space_id").eq("space_id", spaceId).eq("user_id", userId).limit(1).maybeSingle();
+// Reading or erasing write-ups: any member (history stays readable after
+// stepping away). Creating one — which spends OpenAI credit and writes — needs
+// an ACTIVE member, the same rule the database applies to every other write.
+async function isSpaceMember(userId: string, spaceId: string, activeOnly = false): Promise<boolean> {
+  let q = db.from("space_members").select("space_id").eq("space_id", spaceId).eq("user_id", userId);
+  if (activeOnly) q = q.eq("status", "active");
+  const { data } = await q.limit(1).maybeSingle();
   return !!data;
 }
 
 const FEELINGS = ["happy", "calm", "loving", "missing", "playful", "excited", "tired", "worried", "rough"];
 
-Deno.serve(async (req) => {
+Deno.serve(async (req) => withAllowedOrigin(req, await route(req)));
+
+async function route(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
 
   // app.js calls "<url>/v1/recordings[/id]" or "<url>/v1/search" — <url> is
@@ -98,7 +115,7 @@ Deno.serve(async (req) => {
     console.error(err);
     return json({ error: String(err) }, 500);
   }
-});
+}
 
 async function handleCreate(req: Request): Promise<Response> {
   if (!OPENAI_API_KEY) return json({ error: "OPENAI_API_KEY not set" }, 500);
@@ -118,7 +135,7 @@ async function handleCreate(req: Request): Promise<Response> {
   // actually belong to this space. is_space_member's own check already
   // implies the space exists, so there's no separate existence check to
   // bypass here — a nonexistent space can't have a member row either.
-  if (!(await isSpaceMember(userId, spaceId))) return json({ error: "not a member of this space" }, 403);
+  if (!(await isSpaceMember(userId, spaceId, true))) return json({ error: "not an active member of this space" }, 403);
 
   await db.from("recordings").upsert({ id: recordingId, space_id: spaceId, status: "pending", error: null });
 

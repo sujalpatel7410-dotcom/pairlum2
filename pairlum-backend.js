@@ -199,7 +199,11 @@ window.PairlumBackend = (function(){
   // never wait on a database round-trip.
   function subscribeSpace(spaceId, onSpaceChange, onMemberJoin, onMemberUpdate, onBroadcast){
     if(!configured) return { unsubscribe: function(){}, broadcast: function(){} };
-    var channel = client.channel("space-" + spaceId)
+    // Private channel: Supabase checks the realtime.messages policies in
+    // schema.sql, so only this space's members can receive (and only active
+    // ones can send) its live signals. Database changes on the same channel
+    // are still filtered by each table's own row-level security.
+    var channel = client.channel("space-" + spaceId, { config: { private: true } })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "spaces", filter: "id=eq." + spaceId }, function(payload){
         onSpaceChange(payload.new);
       })
