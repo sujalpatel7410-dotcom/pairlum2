@@ -107,4 +107,5 @@ body{background:var(--ivory);color:var(--ink);font:400 1.05rem/1.6 var(--font-ui
 .legal-sec h2{margin:0 0 14px;font:600 1.6rem var(--font-display);letter-spacing:-.02em}
 .legal-sec p{margin:0 0 14px;color:var(--ink)}
 .legal-sec ul{margin:0 0 14px;padding-left:22px}
+.legal-todo{padding:0 4px;border-radius:4px;background:color-mix(in srgb,var(--gold) 28%,transparent);color:var(--deepwine);font-style:italic;white-space:normal}
 .legal-draft{margin:0 0 30px;padding:14px 18px;border-radius:14px;background:color-mix(in srgb,var(--gold) 16%,transparent);color:var(--deepwine);font-size:.88rem;line-height:1.5}

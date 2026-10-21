@@ -236,6 +236,14 @@ they're left as clearly-labeled placeholders, not wired to real money/APIs:
   `http://localhost:8743`). Until the ID is set, that button says so plainly
   instead of pretending to work.
 
+- **The legal page** (`legal.html`) is written to match how Pairlum works
+  today (no automatic renewal, a 7-day refund window, what deleting an
+  account really removes, the DPDP Act 2023), but details only you know are
+  shown as highlighted placeholders: the company name, registered address,
+  hosting region, payment provider, backup retention, the reply time for
+  complaints, and the courts' city. Fill them in (search the file for
+  `legal-todo`) and have it reviewed before real couples sign up.
+
 Voice "understanding" (transcription/write-up) is no longer a stub — see
 step 8 above, the code is fully built, it's just a deploy + OpenAI key away.
 

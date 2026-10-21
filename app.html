@@ -18,7 +18,7 @@
   ">
   <title>Pairlum — Your day together</title>
   <meta name="description"
-    content="Pairlum dashboard prototype — the shared day, presence, and history of a long-distance couple.">
+    content="Pairlum — the shared day, presence and story of two people who live apart.">
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="manifest" href="manifest.json">
@@ -74,6 +74,10 @@
     (function () {
       try {
         var q = /(?:^|[?&])demo=([a-z]+)/.exec(location.search), s = window.sessionStorage;
+        // Never in a real account: the demo writes its own couple's year into
+        // this browser's copy of the space, which would then be saved.
+        var cfg = window.PAIRLUM_CONFIG || {};
+        if (cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase && window.supabase.createClient) { s.removeItem("pairlum-demo"); return; }
         if (q) { if (q[1] === "year") s.setItem("pairlum-demo", "year"); else s.removeItem("pairlum-demo"); }
         if (s.getItem("pairlum-demo") === "year") document.write('<script src="demo-year.js"><\/script>');
       } catch (e) { }
@@ -562,7 +566,7 @@
           </div>
 
           <!-- RESURFACED MEMORY -->
-          <div data-home-card="resurfaced" class="container">
+          <div data-home-card="resurfaced" class="container" data-demo-only>
             <section class="section" style="padding-top:0">
               <p class="eyebrow">From your story</p>
               <div class="resurfaced" style="margin-top:14px">
@@ -622,7 +626,8 @@
                 </div>
                 <a class="link-more" href="#" data-view-link="story">Open Our Story →</a>
               </div>
-              <div class="history-row">
+              <p class="body-m history-summary" id="historySummary" hidden></p>
+              <div class="history-row" data-demo-only>
                 <div class="history-tile">
                   <div class="photo photo--reunion"></div>
                   <div class="moment-scrim"></div>
@@ -678,7 +683,7 @@
         <section class="view" id="view-story" data-view-panel="story">
           <div class="container">
             <div class="hero" style="padding-bottom:10px">
-              <p class="eyebrow">Since 12 March 2022</p>
+              <p class="eyebrow" id="storySince">Since 12 March 2022</p>
               <h1 class="disp-1">Our Story.</h1>
               <p class="body-l" style="margin-top:10px;max-width:52ch">Your shared days, memories, and milestones — all
                 in one place.</p>

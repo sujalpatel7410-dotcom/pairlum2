@@ -1872,7 +1872,11 @@ body.reduced-motion .moment-heart.is-pop{animation:none}
   margin-top:16px;padding:10px 14px;border:1px dashed var(--line);border-radius:var(--radius-m);
   font-family:var(--font-ui);font-size:.8rem;color:var(--ink-soft);
 }
+.viewing-as[hidden]{display:none}
 .viewing-as b{color:var(--ink);font-weight:600}
+/* Demo-only markup (the demo couple's own pictures and story) never shows in a real account */
+body.is-real [data-demo-only]{display:none !important}
+.history-summary{margin:12px 0 0;color:var(--ink-soft)}
 .viewing-as a{color:var(--wine-text);font-weight:600;text-decoration:underline;text-underline-offset:3px}
 
 /* Presence row: keep the distance chip clear of both avatars on narrow phones */

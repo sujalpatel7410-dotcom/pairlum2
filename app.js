@@ -496,7 +496,7 @@
     return { db: db };
   }
   function fillSharedDefaults(db) {
-    if (!Array.isArray(db.chapters)) db.chapters = seedChapters(); // spaces created before chapters were editable
+    if (!Array.isArray(db.chapters)) db.chapters = isRealBackend() ? [] : seedChapters(); // spaces created before chapters were editable
     SHARED_ARRAYS.forEach(function (k) { if (!Array.isArray(db[k])) db[k] = []; });
     if (!db.quiz || typeof db.quiz !== "object") db.quiz = { round: 0, answers: {} };
     if (!db.quiz.answers) db.quiz.answers = {};
@@ -522,8 +522,13 @@
     }
     var db = r.db;
     if (r.fresh) {
-      db = seedShared();
-      try { localStorage.setItem(SHARED_KEY, JSON.stringify(db)); } catch (e) { }
+      // A real account's record only ever comes from the server (pairlum-sync.js),
+      // so nothing is written here, and never the demo couple's story.
+      if (isRealBackend()) db = window.PairlumBackend && window.PairlumBackend.emptySpaceSeed ? window.PairlumBackend.emptySpaceSeed() : { v: 1 };
+      else {
+        db = seedShared();
+        try { localStorage.setItem(SHARED_KEY, JSON.stringify(db)); } catch (e) { }
+      }
     }
     return liftTrash(fillSharedDefaults(db));
   }
@@ -925,7 +930,7 @@
 
     var start = new Date(SPACE.relationshipStart + "T00:00:00");
     var annivNext = nextOccurrence(start.getMonth() + 1, start.getDate());
-    list.push({
+    if (startKnown()) list.push({
       id: "anniversary", emoji: "🎉", title: "Your anniversary", removable: false, date: annivNext,
       sub: ordinal(annivNext.getFullYear() - start.getFullYear()) + " anniversary"
     });
@@ -1246,10 +1251,12 @@
 
     var startDate = new Date(SPACE.relationshipStart);
     var startLabel = new Intl.DateTimeFormat("en-US", { day: "numeric", month: "long", year: "numeric" }).format(startDate);
-    setText("usProfileMeta", (bothCities ? cu.city + " · " + p.city + " · " : "") + "together since " + startLabel);
+    var known = startKnown();
+    setText("usProfileMeta", (bothCities ? cu.city + " · " + p.city + " · " : "") + (known ? "together since " + startLabel : "add the day you got together in Profile"));
+    setText("storySince", known ? "Since " + new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric" }).format(startDate) : "Your story so far");
 
     var years = (Date.now() - startDate.getTime()) / (365.25 * 86400000);
-    setText("statYears", String(Math.floor(years)));
+    setText("statYears", known ? String(Math.floor(years)) : "–");
     setText("statMoments", SPACE.totalSharedMoments.toLocaleString("en-US"));
 
     // Reunion — known to the day, or only to the month, or only to the year.
@@ -6516,14 +6523,14 @@
     var hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: me.timezone, hour: "numeric", hourCycle: "h23" }).format(new Date()));
     var greet = hour < 5 ? "Still up" : hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : hour < 22 ? "Good evening" : "Good night";
     var ru = reunionParse(SPACE.reunionDate);
-    var special = "";
+    var special = "", known = startKnown();
     if (ru && ru.precision === "day" && ru.value === isoFromDate(new Date())) special = "Today's the day you see " + p.name + ".";
-    else if (t.anniversary) special = "Today is your " + ordinal(t.years) + " anniversary.";
-    else if (t.monthiversary) special = t.months + " months together today.";
-    else if (t.days % 100 === 0) special = t.days.toLocaleString("en-US") + " days together today.";
+    else if (known && t.anniversary) special = "Today is your " + ordinal(t.years) + " anniversary.";
+    else if (known && t.monthiversary) special = t.months + " months together today.";
+    else if (known && t.days % 100 === 0) special = t.days.toLocaleString("en-US") + " days together today.";
     node.innerHTML = '<span class="little-greet">' + escapeHtml(greet + ", " + me.name) + '</span>' +
       (special ? '<span class="little-special">' + escapeHtml(special) + '</span>'
-        : '<span class="little-days">Day ' + t.days.toLocaleString("en-US") + ' together</span>');
+        : '<span class="little-days">' + (known ? "Day " + t.days.toLocaleString("en-US") + " together" : "When did you two get together? Add it in Profile.") + '</span>');
     node.classList.toggle("is-special", !!special);
   }
   function wireSmallTouches() {
@@ -7396,7 +7403,20 @@
     var avatarB = document.getElementById("presenceAvatarB");
     if (avatarB) avatarB.classList.toggle("is-recent", !!latest && (Date.now() - latest.at) < 10 * 60 * 1000);
   }
+  // Home → Our Story: the demo shows four picture tiles of its own story; a
+  // real space says what's really there.
+  function renderHistoryPreview() {
+    var line = document.getElementById("historySummary");
+    if (!line || !isRealBackend()) return;
+    var ch = (SPACE.chapters || []).length, mem = DB.memories.length;
+    var bits = [];
+    if (ch) bits.push(ch + (ch === 1 ? " chapter" : " chapters"));
+    if (mem) bits.push(mem + (mem === 1 ? " memory" : " memories"));
+    line.textContent = bits.length ? bits.join(" · ") + " so far." : "Your chapters and memories will gather here. Add the first ones in Our Story.";
+    line.hidden = false;
+  }
   function renderShared() {
+    renderHistoryPreview();
     renderNotes();
     renderFeeling();
     syncMomentsDom();
@@ -7567,6 +7587,7 @@
   function wireViewingAs() {
     var box = document.getElementById("viewingAs");
     if (!box) return;
+    if (isRealBackend()) { box.hidden = true; return; } // real accounts each have their own login
     var me = SPACE.currentUser, p = SPACE.partner;
     setText("viewingAsName", me.name);
     var link = document.getElementById("viewingAsOpen");
@@ -8489,6 +8510,27 @@
   function setUnderstood(recId, record) {
     return mutate(function (db) { db.understood[recId] = record; }, { evenIfPaused: true });
   }
+  // What the understanding service sends back is kept only while you still
+  // want write-ups, and never over words you typed yourself in the meantime.
+  function setServiceUnderstood(recId, record) {
+    if (!understandAllowed(ME)) { dropServiceUnderstood(recId); return false; }
+    var kept = false;
+    var ok = mutate(function (db) {
+      var cur = db.understood[recId];
+      if (cur && cur.source === "you") return; // your own words win
+      db.understood[recId] = record; kept = true;
+    }, { evenIfPaused: true });
+    return ok && kept;
+  }
+  // You switched write-ups off while one was on its way: the service is told
+  // to forget it, and its "writing this up" marker goes.
+  function dropServiceUnderstood(recId) {
+    forgetAtService([recId]);
+    mutate(function (db) {
+      var cur = db.understood[recId];
+      if (cur && cur.source === "service" && cur.status !== "ready") delete db.understood[recId];
+    }, { evenIfPaused: true });
+  }
   // What the screen says about a recording that has no write-up.
   function understandStatus(rec) {
     var u = understoodOf(rec.recId);
@@ -8537,24 +8579,28 @@
         .then(function (r) { if (r.status === 202) return { status: "pending" }; if (!r.ok) throw new Error("service"); return r.json(); })
         .then(function (data) {
           if (data && data.status === "pending") {
-            setUnderstood(rec.recId, { status: "pending", source: "service", at: Date.now() });
-            pollService(rec, base, cfg, 0);
-          } else setUnderstood(rec.recId, cleanUnderstood(data, "service"));
+            if (setServiceUnderstood(rec.recId, { status: "pending", source: "service", at: Date.now() })) pollService(rec, base, cfg, 0);
+          } else setServiceUnderstood(rec.recId, cleanUnderstood(data, "service"));
           done();
         })
-        .catch(function () { setUnderstood(rec.recId, { status: "failed", source: "service", at: Date.now() }); done(); });
+        .catch(function () { setServiceUnderstood(rec.recId, { status: "failed", source: "service", at: Date.now() }); done(); });
     });
   }
   function pollService(rec, base, cfg, n) {
     var waits = (cfg.pollMs && cfg.pollMs.length) ? cfg.pollMs : [2000, 5000, 12000, 30000];
     if (n >= waits.length) return; // still pending: tried again the next time Pairlum opens
     window.setTimeout(function () {
+      // Asked again before every check: you may have switched write-ups off,
+      // or written this one yourself, since it was sent.
+      if (!understandAllowed(ME)) { dropServiceUnderstood(rec.recId); afterUnderstood(); return; }
+      var mine = understoodOf(rec.recId);
+      if (mine && mine.source === "you") return;
       serviceHeaders(cfg).then(function (headers) {
         return fetch(base + "/v1/recordings/" + encodeURIComponent(rec.recId), { headers: headers });
       })
         .then(function (r) { if (!r.ok) throw new Error("service"); return r.json(); })
         .then(function (data) {
-          if (data && data.status === "ready") { setUnderstood(rec.recId, cleanUnderstood(data, "service")); afterUnderstood(); }
+          if (data && data.status === "ready") { setServiceUnderstood(rec.recId, cleanUnderstood(data, "service")); afterUnderstood(); }
           else pollService(rec, base, cfg, n + 1);
         })
         .catch(function () { pollService(rec, base, cfg, n + 1); });
@@ -9844,6 +9890,10 @@
     if (nick) SPACE.partner.name = nick;
     SPACE.relationshipStart = validIso(DB.relStart) ? DB.relStart : (real ? connectedSince() : base.relationshipStart);
   }
+  // Whether "Together since" is a date the two of you chose. Until a real
+  // couple sets it, Pairlum counts from the day they connected, but never
+  // calls that "together since", an anniversary or "day N together".
+  function startKnown() { return !isRealBackend() || validIso(DB.relStart); }
   // A real couple who hasn't set "Together since" yet: count from the day
   // they connected on Pairlum (or today, before that) — never the demo's date.
   function connectedSince() {
@@ -10235,9 +10285,16 @@
       if (String(k) === String(sharedDay()) && !day[ME]) return; // today: answer first, then see theirs. The Book too.
       if (q && (day[ME] || day[THEM])) qs.push({ q: q.q, you: day[ME] || "", them: day[THEM] || "" });
     });
-    DAILY_QUESTIONS.forEach(function (q) {
+    // The demo fills its empty pages with sample answers; a real Book never
+    // puts words in anyone's mouth (an empty page says it's a sample instead).
+    if (!isRealBackend()) DAILY_QUESTIONS.forEach(function (q) {
       if (q.a && qs.length < 4 && !qs.some(function (x) { return x.q === q.q; })) qs.push({ q: q.q, you: "", them: q.a, sample: true });
     });
+    // "We asked for each other": what one of you really asked the other for,
+    // most asked first. Until there's any, the page is a marked sample.
+    var asked = {};
+    DB.requests.forEach(function (r) { var t = String(r.title || "").trim(); if (t) asked[t] = (asked[t] || 0) + 1; });
+    var needs = Object.keys(asked).sort(function (a, b) { return asked[b] - asked[a]; });
     var facts = function (uid) {
       var f = DB.facts[uid] || {};
       return FACT_FIELDS.map(function (x) { return { label: x.label, value: f[x.k] || "" }; });
@@ -10254,7 +10311,7 @@
     var m = membership(), pl = m ? planById(m.plan) : null, bs = bookStatus();
     return {
       you: person(you, you.name), partner: person(them, theirName),
-      since: longDate(SPACE.relationshipStart), sinceYear: start.getFullYear(), year: now.getFullYear(),
+      since: longDate(SPACE.relationshipStart), sinceKnown: startKnown(), sinceYear: start.getFullYear(), year: now.getFullYear(),
       days: days, years: years, distance: distanceText(), apart: apart,
       totalMoments: SPACE.totalSharedMoments || DB.moments.length,
       counts: { letters: DB.letters.length, notes: DB.notes.length, memories: DB.memories.length, chapters: chapters.length, someday: DB.someday.length, somedayDone: DB.someday.filter(function (x) { return x.done; }).length },
@@ -10273,7 +10330,7 @@
       facts: { you: facts(ME), partner: facts(THEM) },
       dates: getImportantDates().map(function (d) { return { title: d.title, sub: d.sub, when: new Intl.DateTimeFormat("en-US", { day: "numeric", month: "long" }).format(d.date) }; }),
       someday: DB.someday.map(function (x) { return { text: x.text, done: !!x.done }; }),
-      needs: NEED_YOU.map(function (n) { return n.title; }), needCount: DB.requests.length,
+      needs: needs.length ? needs : NEED_YOU.map(function (n) { return n.title; }), needsSample: !needs.length, needCount: DB.requests.length,
       dna: dn,
       reunion: ru ? { big: rc.big, unit: rc.unit, label: ru.label || "", place: SPACE.reunionPlace || "" } : null,
       plans: (DB.plans || []).slice(0, 5).map(function (x) { return x.title; }),
@@ -10739,7 +10796,7 @@
   ];
   function homeCardLabel(id) { var c = HOME_CARDS.filter(function (x) { return x[0] === id; })[0]; return c ? c[2] : id; }
   function homeOrder(group) {
-    var all = HOME_CARDS.filter(function (c) { return c[1] === group; }).map(function (c) { return c[0]; });
+    var all = HOME_CARDS.filter(function (c) { return c[1] === group && !(c[0] === "resurfaced" && isRealBackend()); }).map(function (c) { return c[0]; });
     var saved = ((SPACE.custom.homeOrder || {})[group] || []).filter(function (id) { return all.indexOf(id) > -1; });
     all.forEach(function (id) { if (saved.indexOf(id) === -1) saved.push(id); });
     return saved;
@@ -11704,6 +11761,7 @@
   /* Init                                                                 */
   /* ------------------------------------------------------------------ */
   document.addEventListener("DOMContentLoaded", function () {
+    if (isRealBackend()) document.body.classList.add("is-real"); // hides demo-only markup (styles.css)
     if (RECOVERY) window.setTimeout(showRecoveryScreen, 0);
     else window.setTimeout(function () { retryMediaCleanup(); pruneOldMedia(); resumeUnderstanding(); }, 2500);
     wireMoments(); wireVoiceFind(); setExamplePhrases();
@@ -11790,6 +11848,7 @@
 
     recordMyTimeZone();
     purgeExpiredTrash();
+    renderHistoryPreview();
 
     // Arrived through a partner's invite link: show the invitation (or what's
     // wrong with it) straight away, instead of a "paused" Home with a button

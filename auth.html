@@ -92,6 +92,7 @@
                 required>
             </div>
             <button class="btn" type="submit" id="authSubmit" style="width:100%">Log in</button>
+            <p class="auth-note" id="authAgeNote" hidden>Pairlum is only for adults 18 and over. By starting your First Chapter you confirm you are 18 or older and agree to the <a href="legal.html#terms">Terms</a> and <a href="legal.html#privacy">Privacy Policy</a>.</p>
           </form>
 
           <button class="textlink-center" type="button" id="forgotPasswordBtn" style="margin-top:14px">Forgot your
@@ -280,7 +281,7 @@
         googleBtn.disabled = true;
         if (mode === 'signup') trackSignupStarted();
         // Build the redirect URL pointing back to this exact page so Supabase can
-        // parse the OAuth tokens from the hash and then we redirect to the dashboard.
+        // parse the OAuth tokens from the hash and then we redirect into Pairlum.
         var redirectUrl = location.origin + location.pathname;
         // Remove any stale hash so it doesn't confuse Supabase's detectSessionInUrl.
         if (location.hash) history.replaceState(null, '', location.pathname + location.search);
@@ -299,13 +300,14 @@
         tabLogin.setAttribute('aria-selected', String(!signup));
         tabSignup.setAttribute('aria-selected', String(signup));
         submitBtn.textContent = signup ? 'Start your First Chapter' : 'Log in';
+        var ageNote = $('#authAgeNote'); if (ageNote) ageNote.hidden = !signup;
         pw.setAttribute('autocomplete', signup ? 'new-password' : 'current-password');
         location.hash = signup ? 'signup' : 'login';
         var forgotBtn = $('#forgotPasswordBtn'); if (forgotBtn) forgotBtn.hidden = signup || !hasSupabase;
         showError(''); showOk('');
         note.textContent = hasSupabase
           ? (signup ? 'Takes a minute. No card required.' : "Don't have a space yet? Switch to Start your First Chapter.")
-          : 'Demo mode: no account system is connected yet (see pairlum-config.js). This creates a local, device-only session so you can preview the dashboard.';
+          : 'Demo mode: no account system is connected yet (see pairlum-config.js). This creates a local, device-only session so you can preview Pairlum.';
         // Recovery sets its own hero copy above and stays on the new-password
         // panel regardless of mode — don't stomp on it (setMode still runs
         // once at init either way, to get the tabs/note/autocomplete right).

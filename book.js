@@ -122,7 +122,7 @@
     page("title", "Opening",
       '<div class="bk-title-top"><p class="bk-label">A year, kept</p></div>' +
       '<div class="bk-title-mid' + fitCls(A.name.length > B.name.length ? A.name : B.name, [16, 11, 8]) + '"><h3 class="bk-1l">' + esc(A.name) + '</h3><em>and</em><h3 class="bk-1l">' + esc(B.name) + '</h3></div>' +
-      '<div class="bk-title-bot"><span class="bk-rule"></span><p class="bk-small bk-1l">Together since ' + esc(d.since) + '</p>' +
+      '<div class="bk-title-bot"><span class="bk-rule"></span><p class="bk-small bk-1l">' + (d.sinceKnown === false ? 'On Pairlum since ' : 'Together since ') + esc(d.since) + '</p>' +
         '<p class="bk-small bk-1l">' + esc(A.city) + ' — ' + esc(B.city) + '</p><p class="bk-label bk-title-imprint">Pairlum · ' + esc(volYear) + '</p></div>');
 
     /* 6 — contents */
@@ -155,7 +155,7 @@
 
     /* 9 — numbers */
     var stats = [
-      [String(d.days.toLocaleString ? d.days.toLocaleString("en-US") : d.days), "days together"],
+      [String(d.days.toLocaleString ? d.days.toLocaleString("en-US") : d.days), d.sinceKnown === false ? "days on Pairlum" : "days together"],
       [String(d.totalMoments && d.totalMoments.toLocaleString ? d.totalMoments.toLocaleString("en-US") : d.totalMoments), "shared moments"],
       [String(d.counts.letters), d.counts.letters === 1 ? "letter" : "letters"],
       [String(d.counts.chapters), d.counts.chapters === 1 ? "chapter" : "chapters"],
@@ -366,7 +366,7 @@
     page("needs", "Coming home",
       '<div class="bk-center"><p class="bk-label">On the hard days</p><h3 class="bk-needs-title bk-c2">We asked for each other</h3><ul class="bk-needs">' + (d.needs || []).slice(0, 6).map(function(n){
         return '<li class="bk-1l">' + esc(n) + '</li>';
-      }).join("") + '</ul><p class="bk-small bk-c2">Each of these is something one of you asked the other for.</p></div>');
+      }).join("") + '</ul><p class="bk-small bk-c2">' + (d.needsSample ? 'What you ask each other for on the hard days is printed here.' : 'Each of these is something one of you asked the other for.') + '</p></div>', { sample: !!d.needsSample });
 
     /* 42 — closing */
     page("closing", "Coming home",

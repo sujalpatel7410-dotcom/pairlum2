@@ -24,9 +24,9 @@
 <main class="pg-main" id="main" tabindex="-1">
   <p class="pg-eyebrow">Legal</p>
   <h1 class="pg-h1">Privacy &amp; Terms</h1>
-  <p class="pg-lead">What Pairlum keeps, why, and the plain-words version of both.</p>
+  <p class="pg-lead">What Pairlum keeps, why, and what you can do about it — in plain words first, then in full.</p>
 
-  <div class="legal-draft">Draft text for a prototype — written to be honest about how the app behaves today, not yet reviewed by a lawyer. Treat it as a placeholder to replace before real couples' data is involved.</div>
+  <div class="legal-draft">Draft for early access. It is written to match how Pairlum works today and has not yet been reviewed by a lawyer. Details still to be filled in are shown <span class="legal-todo">[like this]</span>.</div>
 
   <ul class="legal-nav">
     <li><a href="#plain">Privacy in plain words</a></li>
@@ -37,43 +37,58 @@
 
   <section class="legal-sec" id="plain">
     <h2>Privacy, in plain words</h2>
-    <p>Pairlum is built for two people. Everything you share — moments, notes, letters, recordings — lives in your shared space and is visible only to the two of you, never to other members, and never sold to advertisers.</p>
-    <p>A voice recording stays on your device unless you choose to share it into your space. If Pairlum ever adds a feature that reads a recording to write it up (so you can search it later by meaning), that only happens once such a service exists, nothing leaves your device before then, and we'll tell you plainly when it changes.</p>
-    <p>You can export your data or delete your space at any time from Settings. Deleting your space removes both partners' copies.</p>
+    <p>Pairlum is a private space for two people. What you share — moments, notes, letters, photos, voice notes — is stored on Pairlum's servers so it reaches both your devices, and only the two of you can open it. It is never sold and never used for advertising.</p>
+    <p>Your recordings are written up only if you switch that on for yourself (Settings → Privacy). Then your own voice notes and clips are sent to be transcribed and summarised; the words are kept, the sound is not. Your partner decides separately for theirs.</p>
+    <p>Removing something keeps it in Recently Deleted for 30 days, in case you change your mind, and then clears it for good. Deleting your account removes your login and everything you added; what your partner added stays with them. You can export a full copy of your space at any time.</p>
   </section>
 
   <section class="legal-sec" id="privacy">
     <h2>Privacy policy</h2>
-    <p>This policy covers the Pairlum website and app (together, "Pairlum"), operated for couples who want a private, shared space.</p>
-    <p><strong>What we collect:</strong> the email address you sign up with; the content you and your partner create inside your shared space (text, photos, voice recordings, letters); basic device/browser information needed to run the app; and, if you choose to connect it, data from Google Photos for importing memories.</p>
-    <p><strong>How we use it:</strong> solely to operate your shared space, keep it in sync between your two devices, process membership payments, and respond to support requests. We do not sell personal data or use it for third-party advertising.</p>
-    <p><strong>Who can see it:</strong> only the two members of a space. Pairlum staff do not read the contents of a space except where necessary to investigate abuse, a security issue, or at your explicit request for support.</p>
-    <p><strong>Storage and security:</strong> content is stored using industry-standard encryption in transit and access controls at rest. No system is perfectly secure; we disclose any breach that could affect your data as required by law.</p>
-    <p><strong>Your choices:</strong> you can export your data, delete individual items, or delete your whole space at any time. Deleting a space is permanent and removes it for both partners.</p>
-    <p><strong>Retention:</strong> content is kept for as long as your space exists. If a membership lapses, we keep data for a reasonable grace period before deletion, so you can renew without losing your history.</p>
-    <p><strong>Children:</strong> Pairlum is for adults 18 and over, in keeping with its purpose as a space for romantic partners.</p>
-    <p><strong>Changes:</strong> if this policy changes materially, we'll notify members by email before the change takes effect.</p>
-    <p><strong>Contact:</strong> <a class="textlink" href="mailto:pairlum.co@gmail.com">pairlum.co@gmail.com</a>.</p>
+    <p><strong>Who we are:</strong> Pairlum is operated by Om Dangi (<span class="legal-todo">[company name — to be added]</span>, <span class="legal-todo">[registered address — to be added]</span>, India). For anything about your data, write to <a class="textlink" href="mailto:pairlum.co@gmail.com">pairlum.co@gmail.com</a>. This policy is written to meet India's Digital Personal Data Protection Act, 2023 (the "DPDP Act"); in its words, we are the Data Fiduciary for your personal data and you are the Data Principal.</p>
+    <p><strong>What we collect, and why:</strong></p>
+    <ul>
+      <li>Your email address and password (the password stored only as a secure hash), to give you an account and keep it yours.</li>
+      <li>What you and your partner add to your space — moments, notes, letters, chapters, plans, answers, profile details, photos, clips and voice notes — to keep your space and bring it to both your devices.</li>
+      <li>If you switch on write-ups: the words of your own recordings, with a short title, a feeling and the topics, so a recording can be found again later.</li>
+      <li>A short log of live listening (who listened, when and for how long). The sound itself is sent directly between your two devices and is never recorded or stored.</li>
+      <li>Product counts with no content in them: which of a small, fixed list of things happened (for example "a space was created" or "the membership page was opened"), by whom, in which space and when — never what anyone wrote, said or shared. They help us understand whether Pairlum is working.</li>
+      <li>If you choose to import from Google Photos, only the photos you pick.</li>
+    </ul>
+    <p><strong>Consent:</strong> by creating an account you agree to Pairlum handling the data above for these purposes. Optional features — write-ups, Google Photos import, live listening — each ask you first, and you can switch them off at any time. Switching something off stops it from then on.</p>
+    <p><strong>Who can see it:</strong> only the two people in a space can see what is in it. We don't look at your space's contents. The people who run Pairlum can technically reach the database; we do so only to fix a problem you ask us to look at, to investigate abuse or a security issue, or when the law requires it.</p>
+    <p><strong>Who helps us run Pairlum:</strong> we use a small number of service providers, only to run Pairlum, under their own security and confidentiality terms:</p>
+    <ul>
+      <li>Supabase — accounts, the database and file storage, encrypted in transit and at rest. <span class="legal-todo">[hosting region — to be confirmed]</span></li>
+      <li>OpenAI — transcribing and summarising your recordings, only if you have switched write-ups on.</li>
+      <li>Google — sign-in with Google and Google Photos import, only if you use them.</li>
+      <li>A payment provider, once payments open. <span class="legal-todo">[provider — to be added]</span></li>
+    </ul>
+    <p>Pairlum is not end-to-end encrypted: our servers can read what is stored so they can bring it to both your devices.</p>
+    <p><strong>How long we keep it:</strong> what you add is kept while your account exists. Something you remove waits in Recently Deleted for 30 days and is then cleared for good, with its photo. When you delete your account, your login, your profile and everything you added — with your photos, clips, recordings and their write-ups — are deleted, and your pairing ends for both of you. What your partner added stays with them, and so do things you shared that belong to both of you, such as chapters. Product counts are kept but no longer linked to you. Copies inside our providers' backups are removed on their own schedule. <span class="legal-todo">[backup retention period — to be confirmed]</span></p>
+    <p><strong>Your rights:</strong> under the DPDP Act you can ask us what personal data we hold about you and how it is used; correct or update it (most of it you can change yourself in Profile); have it erased (Settings → Privacy → Delete my account, or by writing to us); withdraw your consent (switch a feature off, or delete your account); and nominate someone to act for you if you die or can no longer act yourself. You can also download everything in your space at any time (Settings → Privacy → Export). To use any of these rights, write to <a class="textlink" href="mailto:pairlum.co@gmail.com">pairlum.co@gmail.com</a>.</p>
+    <p><strong>Complaints:</strong> if you have a concern about how your data is handled, write to us first at <a class="textlink" href="mailto:pairlum.co@gmail.com">pairlum.co@gmail.com</a>, and we'll reply within <span class="legal-todo">[number of days — to be confirmed]</span>. If you're not satisfied with our answer, you can complain to the Data Protection Board of India.</p>
+    <p><strong>Security:</strong> your space is protected by access rules on our servers: only its two members can read it, and each person can change only what is theirs. No system is perfectly secure. If a breach affects your personal data, we will tell you and the Data Protection Board as the DPDP Act requires.</p>
+    <p><strong>Age:</strong> Pairlum is only for adults 18 and over. We don't knowingly hold data about anyone younger; if you believe we do, write to us and we'll delete it.</p>
+    <p><strong>Changes:</strong> if this policy changes in a way that matters, we'll tell you in the app or by email before the change takes effect.</p>
   </section>
 
   <section class="legal-sec" id="terms">
     <h2>Terms of service</h2>
-    <p>By creating a Pairlum account you agree to these terms. If you disagree with them, please don't use Pairlum.</p>
-    <p><strong>Eligibility:</strong> you must be 18 or older. A space is meant for two partners; each partner needs their own account.</p>
-    <p><strong>Your content:</strong> you own what you and your partner create in your space. You're responsible for having the right to share anything you upload, and for respecting your partner's consent when sharing moments that involve them.</p>
-    <p><strong>Acceptable use:</strong> don't use Pairlum to harass, surveil without consent, or harm your partner or anyone else. Spaces found in violation may be suspended.</p>
-    <p><strong>Membership and billing:</strong> paid plans renew yearly unless cancelled. Prices are shown on the <a class="textlink" href="pricing.html">Membership</a> page and will never change for existing content without notice.</p>
-    <p><strong>The Pairlum Book:</strong> a printed Book becomes available after a full year on the Book membership, one per couple space, as described on the Membership page. Shipping times and print specifications will be confirmed before the first print run.</p>
-    <p><strong>Termination:</strong> you may delete your space at any time. We may suspend a space that violates these terms or the law, after a good-faith attempt to reach you where possible.</p>
-    <p><strong>No warranty:</strong> Pairlum is provided "as is" during this prototype/early-access period; features may change as the product develops.</p>
-    <p><strong>Governing law:</strong> these terms are governed by the laws of India, without regard to conflict-of-law rules.</p>
+    <p>By creating a Pairlum account you agree to these terms. If you don't agree, please don't use Pairlum. "We" means Om Dangi, who operates Pairlum (<span class="legal-todo">[company name — to be added]</span>).</p>
+    <p><strong>Who can use it:</strong> you must be 18 or older. A space is for two partners, and each of you needs your own account.</p>
+    <p><strong>Your content:</strong> you own what you add. You give us permission to store it and show it to the two of you, only to run Pairlum. You're responsible for having the right to share what you upload, and for respecting your partner's wishes about moments that involve them.</p>
+    <p><strong>Acceptable use:</strong> don't use Pairlum to harass, threaten, watch someone without their consent, or harm your partner or anyone else, and don't try to get into a space that isn't yours. We may suspend an account that does.</p>
+    <p><strong>Membership and payment:</strong> payments haven't opened yet; until they do, nothing is charged. When they open, a membership is a single payment for one year. It does not renew automatically: when the year ends, it simply ends, and you choose whether to buy another. Prices are shown on the <a class="textlink" href="pricing.html">Membership</a> page before you pay.</p>
+    <p><strong>The Pairlum Book:</strong> on the Book membership, your printed Book becomes available once you have completed a full year on that plan, one per couple's space, as described on the Membership page. Print and delivery details will be confirmed before the first books are made.</p>
+    <p><strong>Ending things:</strong> you can disconnect from your partner (nothing is deleted, the space just stops growing) or delete your account at any time from Settings. We may suspend an account that breaks these terms or the law, after trying in good faith to reach you first where we can.</p>
+    <p><strong>Early access:</strong> Pairlum is new and still changing. We work to keep it running and your data safe, but it is provided as it is, and features may change.</p>
+    <p><strong>Law:</strong> these terms are governed by the laws of India. The courts of <span class="legal-todo">[city — to be added]</span> have jurisdiction.</p>
   </section>
 
   <section class="legal-sec" id="refund">
     <h2>Refund policy</h2>
-    <p>If something isn't working as described, email <a class="textlink" href="mailto:pairlum.co@gmail.com">pairlum.co@gmail.com</a> within 14 days of your payment and we'll make it right, including a full refund if appropriate.</p>
-    <p>After 14 days, yearly membership fees are non-refundable for the remainder of that year, but you can cancel auto-renewal at any time so you're not charged again.</p>
-    <p>If a Book membership is cancelled before a Book has been printed, the Book-specific portion of your most recent payment is refunded; the Digital membership portion is handled under the policy above.</p>
+    <p>Payments haven't opened yet. Once they do: if you change your mind, or something isn't working as described, write to <a class="textlink" href="mailto:pairlum.co@gmail.com">pairlum.co@gmail.com</a> within 7 days of your payment for a full refund, returned the way you paid.</p>
+    <p>After 7 days, a membership isn't refundable for the rest of its year. Nothing renews automatically, so there is never anything to cancel to avoid a future charge.</p>
   </section>
 </main>
 
