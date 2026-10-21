@@ -269,9 +269,16 @@
         googleBtn.disabled = true;
         googleBtn.title = "Connect a Supabase project with Google sign-in enabled first (see supabase/SETUP.md).";
       }
+      // Content-free analytics: only the event's name is sent (see
+      // supabase/migrations/20261019150000_analytics.sql). Never holds anything up.
+      function trackSignupStarted() {
+        if (!hasSupabase) return;
+        try { client.rpc('track_event', { event_name: 'signup_started' }).then(null, function () { }); } catch (e) { }
+      }
       googleBtn.addEventListener('click', function () {
         if (!hasSupabase) { showError('Google sign-in needs a Supabase project connected first (see pairlum-config.js).'); return; }
         googleBtn.disabled = true;
+        if (mode === 'signup') trackSignupStarted();
         // Build the redirect URL pointing back to this exact page so Supabase can
         // parse the OAuth tokens from the hash and then we redirect to the dashboard.
         var redirectUrl = location.origin + location.pathname;
@@ -331,6 +338,7 @@
         submitBtn.disabled = true;
 
         if (hasSupabase) {
+          if (mode === 'signup') trackSignupStarted();
           // The confirmation email links back to this page on this site (it must
           // also be allowed under Supabase → Auth → URL Configuration → Redirect
           // URLs). A pending invite rides along in that link, so it still

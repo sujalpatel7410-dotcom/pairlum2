@@ -722,6 +722,7 @@
       RECENT_OPS.push({ id: opId, fn: fn, evenIfPaused: !!opts.evenIfPaused, at: Date.now(), epoch: DB.epoch || 0 });
       if (RECENT_OPS.length > 40) RECENT_OPS.shift();
     }
+    if (ok) noteFirstMemory();
     rebuildFromShared();
     if (typeof renderWaiting === "function" && document.getElementById("waitingList")) { renderWaiting(); renderGarden(); }
     return ok;
@@ -790,7 +791,29 @@
   if (isRealBackend()) SPACE.devices = defaultSpace().devices;
   if (ME === "u_mira") { var swapUser = SPACE.currentUser; SPACE.currentUser = SPACE.partner; SPACE.partner = swapUser; }
   SPACE.needYou = NEED_YOU;
+  // Content-free analytics (supabase/migrations/20261019150000_analytics.sql):
+  // only an event's name is sent, never anything you wrote or made. Real
+  // accounts only.
+  function track(name) {
+    if (!isRealBackend() || !window.PairlumBackend || typeof window.PairlumBackend.trackEvent !== "function") return;
+    try { window.PairlumBackend.trackEvent(name); } catch (e) { }
+  }
+  // "first_memory_created" goes once, when your first moment or memory is
+  // saved. Opening a space where you already have one doesn't send it.
+  var FIRST_MEMORY_KEY = NS + "pairlum-first-memory-v1-" + ME;
+  function hasOwnMemory(db) {
+    var mine = function (x) { return !!x && x.by === ME && !x.demo; };
+    return db.moments.some(mine) || db.memories.some(mine);
+  }
+  function firstMemoryDone() { try { return localStorage.getItem(FIRST_MEMORY_KEY) === "1"; } catch (e) { return true; } }
+  function markFirstMemory() { try { localStorage.setItem(FIRST_MEMORY_KEY, "1"); } catch (e) { } }
+  function noteFirstMemory() {
+    if (firstMemoryDone() || !hasOwnMemory(DB)) return;
+    markFirstMemory();
+    track("first_memory_created");
+  }
   var DB = readShared();
+  if (hasOwnMemory(DB)) markFirstMemory();
   rebuildFromShared();
   SPACE.dailyQuestion = pickDailyQuestion();
 
@@ -11397,7 +11420,13 @@
       "open-inbox": openInbox,
       "open-profile": function () { renderProfileOverlay(); openOverlay("profileOverlay"); },
       "open-reunion-settings": function () { renderReunionSettings(); openOverlay("reunionSettingsOverlay"); },
-      "open-membership": function () { renderMembershipOverlay(); openOverlay("membershipOverlay"); },
+      "open-membership": function (e) {
+        track("pricing_viewed");
+        // The Book teaser ("How to get yours") is the way in to upgrading.
+        var from = e && e.currentTarget, m = membership();
+        if (from && from.id === "bookTeaserBtn" && (!m || m.plan !== "book")) track("upgrade_clicked");
+        renderMembershipOverlay(); openOverlay("membershipOverlay");
+      },
       "open-performance": function () { renderPerfOverlay(); openOverlay("perfOverlay"); },
       "open-about": function () { renderAboutOverlay(); openOverlay("aboutOverlay"); },
       "open-customize": function () { renderCustomizeOverlay(); openOverlay("customizeOverlay"); },

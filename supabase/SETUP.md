@@ -56,6 +56,15 @@ what it changes; they're safe to run twice and don't delete existing data.
   reached the server (offline, or the server refused it) and retries on its
   own. Adds helper functions and replaces `write_space_data`; no data
   changes.
+- `20261019150000_analytics.sql` — content-free product analytics: eleven
+  named events (sign-up started and completed, space created, invite sent,
+  partner joined, first memory, membership screen viewed, upgrade tapped,
+  and three for later: first chapter, checkout, purchase). Each row is only
+  *which event, who, which space, when* — never words, photos, voice or
+  names. The app can add events but never read them; sign-up, space,
+  invite and join are recorded by the database itself. Read them in the SQL
+  Editor — the comment at the top of the file has a day-by-day count query.
+  Deleting an account keeps its events but forgets whose they were.
 
 ## 3. Turn on Realtime (usually already on)
 

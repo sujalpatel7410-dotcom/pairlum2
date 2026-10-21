@@ -256,8 +256,19 @@ window.PairlumBackend = (function(){
     return client.storage.from("media").remove(paths).then(function(r){ if(r.error) throw r.error; return r.data; });
   }
 
+  // Content-free analytics (supabase/migrations/20261019150000_analytics.sql):
+  // only an event's name is sent — never anything anyone wrote or made — and
+  // who/which space is worked out on the server. Resolves true/false, never
+  // rejects: counting must never get in anyone's way.
+  function trackEvent(name){
+    if(!configured) return Promise.resolve(false);
+    try{
+      return client.rpc("track_event", { event_name: name }).then(function(r){ return !r.error; }, function(){ return false; });
+    }catch(e){ return Promise.resolve(false); }
+  }
+
   return {
-    isConfigured: isConfigured,
+    isConfigured: isConfigured, trackEvent: trackEvent,
     getSession: getSession, onAuthChange: onAuthChange, signUp: signUp, signIn: signIn, signOut: signOut,
     myMembership: myMembership, emptySpaceSeed: emptySpaceSeed, createSpace: createSpace,
     createInvite: createInvite, cancelInvite: cancelInvite, myPendingInvite: myPendingInvite,
