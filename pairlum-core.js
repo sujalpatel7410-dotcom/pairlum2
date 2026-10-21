@@ -43,6 +43,16 @@ window.PL = (function(){
   var AUTH_KEY = "pairlum-auth-session-v1";
   var auth = {
     session: function(){ return read(AUTH_KEY, null); },
+    // Signed in on this device: in the demo, or with a real account (the
+    // Supabase session it keeps here), so the front page can offer "Open
+    // Pairlum" instead of "Log in".
+    signedIn: function(){
+      if(read(AUTH_KEY, null)) return true;
+      try{
+        for(var i = 0; i < localStorage.length; i++){ if(/^sb-.+-auth-token$/.test(localStorage.key(i) || "")) return true; }
+      }catch(e){}
+      return false;
+    },
     setSession: function(data){ writeSafe(AUTH_KEY, data || { at: Date.now() }); },
     clearSession: function(){ try{ localStorage.removeItem(AUTH_KEY); }catch(e){} }
   };

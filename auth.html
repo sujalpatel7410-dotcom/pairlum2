@@ -153,6 +153,10 @@
         history.replaceState(null, '', location.pathname + (rest === '?' ? '' : rest) + location.hash);
         if (!location.hash) location.hash = '#signup';
       })();
+      // A sign-in link that didn't work (it expired, or was already used)
+      // comes back with the reason in the address. Read it now: setMode()
+      // below replaces the address with #login / #signup.
+      var linkProblem = /[#?&]error_description=([^&]*)/.exec(location.hash + '&' + location.search);
       // Holding a partner's invite (just now, or from an earlier visit):
       // say so, so signing in reads as the step towards joining them.
       var invited = false;
@@ -329,6 +333,14 @@
       tabLogin.addEventListener('click', function () { setMode('login'); });
       tabSignup.addEventListener('click', function () { setMode('signup'); });
       setMode(mode);
+
+      // …and say so plainly (the reason read above), with the address tidied
+      // so a reload doesn't repeat it.
+      if (linkProblem) {
+        var why = ''; try { why = decodeURIComponent(linkProblem[1].replace(/\+/g, ' ')); } catch (e) { }
+        showError((/expired|invalid/i.test(why) ? 'That link has expired or was already used.' : 'That link didn’t work.') + ' Log in below, or tap “Forgot your password?” for a new one.');
+        history.replaceState(null, '', location.pathname + '#login');
+      }
 
       form.addEventListener('submit', function (e) {
         e.preventDefault();

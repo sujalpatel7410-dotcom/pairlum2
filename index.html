@@ -17,6 +17,17 @@
   object-src 'none';
   base-uri 'self';
 ">
+  <script>
+    // Landing → log in → Pairlum. A sign-in link (email confirmation,
+    // password reset, Google) or an invite that comes back to this page
+    // instead of the login page is handed on to it, so it finishes signing
+    // the person in and opens Pairlum rather than showing this page again.
+    (function () {
+      var h = location.hash, q = location.search;
+      if (/(^#|&)(access_token|refresh_token|error_description)=/.test(h) || /[?&](code|error_description|invite)=/.test(q))
+        location.replace('auth.html' + q + h);
+    })();
+  </script>
   <title>Pairlum — Apart. Still inside each other’s day.</title>
   <meta name="description"
     content="Pairlum is a private world for couples, especially those living apart. Share the small things from both your days, and watch them become your story.">
@@ -2730,7 +2741,7 @@
       $$('input[name=q]', panel).forEach(function (r) { r.addEventListener('change', function () { SET.quality = r.value; saveSet(); root.dataset.quality = r.value === 'low' ? 'low' : r.value; Heart.reconfigure() }) });
 
       /* ---------- signed in? ---------- */
-      if (PL.auth.session()) { var st = $('#startLink'); st.href = PL.home(); st.querySelector('.long').textContent = 'Open Pairlum'; st.querySelector('.short').textContent = 'Open'; $('#loginLink').remove(); var ls = $('.login-s'); if (ls) ls.remove() }
+      if (PL.auth.signedIn()) { var st = $('#startLink'); st.href = PL.home(); st.querySelector('.long').textContent = 'Open Pairlum'; st.querySelector('.short').textContent = 'Open'; $('#loginLink').remove(); var ls = $('.login-s'); if (ls) ls.remove() }
 
       /* ---------- preloader (first visit per session only) ---------- */
       function heroIn() { $('#heroText').classList.add('is-in'); if (Heart) Heart.ready() }
