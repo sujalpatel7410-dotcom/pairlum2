@@ -1190,7 +1190,21 @@
      (profiles[id].photoAt) lives in the shared JSON record; the bytes
      never do, same reasoning as every other piece of media in this app. */
   function avatarPhotoId(personId) { return "avatar:" + personId; }
-  var AVATAR_URLS = {}, AVATAR_LOADING = {};
+  var AVATAR_URLS = {}, AVATAR_AT = {}, AVATAR_LOADING = {}; // AVATAR_AT: the photoAt each shown picture belongs to
+  // Which photo (by photoAt) the copy kept on this device is. A copy is only
+  // trusted for that photo: a newer one, changed by your partner or by you
+  // on another device, is fetched fresh instead of the old one being shown.
+  var AVATAR_CACHE_KEY = NS + "pairlum-avatar-cache-v1";
+  function avatarCachedAt(personId) {
+    try { return (JSON.parse(localStorage.getItem(AVATAR_CACHE_KEY)) || {})[personId] || null; } catch (e) { return null; }
+  }
+  function noteAvatarCached(personId, at) {
+    try {
+      var m = JSON.parse(localStorage.getItem(AVATAR_CACHE_KEY)) || {};
+      if (at) m[personId] = at; else delete m[personId];
+      localStorage.setItem(AVATAR_CACHE_KEY, JSON.stringify(m));
+    } catch (e) { }
+  }
   function paintAvatarEl(el, personId) {
     if (!el) return;
     var url = AVATAR_URLS[personId];
@@ -1207,19 +1221,33 @@
     paintAvatarEl(document.getElementById("presenceAvatarB"), p.id);
     paintAvatarEl(document.getElementById("needPrimaryAvatar"), p.id);
     paintAvatarEl(document.getElementById("profileAvatar"), cu.id);
+    paintAvatarEl(document.getElementById("usAvatarA"), cu.id);
+    paintAvatarEl(document.getElementById("usAvatarB"), p.id);
     paintAvatarEl(document.querySelector("#needOverlay .need-reveal-avatar"), p.id);
   }
-  // Loads a person's photo blob once (if they have one) and caches it as an
-  // object URL; a no-op once cached or already in flight.
+  // Loads a person's current photo (if they have one) and caches it as an
+  // object URL; a no-op once that photo is shown or already on its way.
   function ensureAvatarPhoto(person) {
-    if (!person.photoAt) { if (AVATAR_URLS[person.id]) { URL.revokeObjectURL(AVATAR_URLS[person.id]); delete AVATAR_URLS[person.id]; } return; }
-    if (AVATAR_URLS[person.id] || AVATAR_LOADING[person.id]) return;
-    AVATAR_LOADING[person.id] = true;
-    idbGetMedia(avatarPhotoId(person.id), function (err, blob) {
-      delete AVATAR_LOADING[person.id];
-      if (err || !blob) return;
-      AVATAR_URLS[person.id] = URL.createObjectURL(blob);
+    var id = person.id, at = person.photoAt || null;
+    if (!at) { if (AVATAR_URLS[id]) { URL.revokeObjectURL(AVATAR_URLS[id]); delete AVATAR_URLS[id]; } delete AVATAR_AT[id]; return; }
+    if ((AVATAR_URLS[id] && AVATAR_AT[id] === at) || AVATAR_LOADING[id] === at) return;
+    AVATAR_LOADING[id] = at;
+    var key = avatarPhotoId(id);
+    var show = function (blob) {
+      if (AVATAR_LOADING[id] !== at) return; // an even newer photo is on its way
+      delete AVATAR_LOADING[id];
+      if (!blob) return;
+      if (AVATAR_URLS[id]) URL.revokeObjectURL(AVATAR_URLS[id]);
+      AVATAR_URLS[id] = URL.createObjectURL(blob);
+      AVATAR_AT[id] = at;
       paintAllAvatars();
+    };
+    var fromDevice = function () { idbGetMedia(key, function (err, blob) { show(err ? null : blob); }); };
+    if (avatarCachedAt(id) === at || !window.PairlumMediaBridge) return fromDevice();
+    window.PairlumMediaBridge.download(key, function (err, blob) {
+      if (err || !blob) return fromDevice(); // offline, or not uploaded yet: the copy here beats none
+      idbPutMedia(key, blob, function (e2) { if (!e2) noteAvatarCached(id, at); }, { cacheOnly: true });
+      show(blob);
     });
   }
 
@@ -1240,6 +1268,8 @@
     setText("cityALabel", cu.city);
     setText("cityBLabel", p.city);
     setText("needPrimaryAvatar", p.initial);
+    setText("usAvatarA", cu.initial);
+    setText("usAvatarB", p.initial);
     ensureAvatarPhoto(cu); ensureAvatarPhoto(p); paintAllAvatars();
     setText("thinkingQuickLabel", "Thinking of " + p.name);
     renderComfort();
@@ -2102,6 +2132,7 @@
     }
     if (id === "voiceFindOverlay") { stopVoiceFindAudio(); return; }
     if (id === "needOverlay") { if (comfortAudio) { try { comfortAudio.pause(); } catch (e) { } } return; }
+    if (id === "needHistoryOverlay") { document.querySelectorAll("#needHistoryBody audio").forEach(function (m) { try { m.pause(); } catch (e) { } }); return; }
     if (id === "memoryOverlay") { document.querySelectorAll("#memoryViewMedia audio, #memoryViewMedia video").forEach(function (m) { try { m.pause(); } catch (e) { } }); return; }
     if (id === "comfortOverlay") {
       var was = recordingIn(id);
@@ -2167,7 +2198,7 @@
     var tail = last.status !== "pending" && last.noReply ? ", no reply needed" : "";
     if (last.reply === "here") { statusWord = SPACE.partner.name + " answered: I'm here"; tail = ""; }
     if (last.reply === "later") { statusWord = SPACE.partner.name + " saw it and can't right now"; tail = ""; }
-    line.textContent = "You said you could use " + last.title.toLowerCase() + " · " + statusWord + tail;
+    line.textContent = "You said you could use " + last.title.toLowerCase() + (last.hasVoice ? " · with your voice" : "") + " · " + statusWord + tail;
   }
 
   function markRequestDelivered(reqItem) {
@@ -2221,11 +2252,22 @@
       '</div>';
     box.hidden = false;
     if (r.hasVoice) {
-      idbGetMedia(r.id, function (err, blob) {
-        var au = box.querySelector("audio");
-        if (err || !blob || !au) return;
-        au.src = URL.createObjectURL(blob);
-      });
+      // Their voice can still be on its way up when the request arrives, so
+      // look again a few times before saying it couldn't be loaded.
+      var tries = 0;
+      var loadVoice = function () {
+        idbGetMedia(r.id, function (err, blob) {
+          var au = box.querySelector("audio");
+          if (!au || box.getAttribute("data-req") !== r.id) return; // a newer request took its place
+          if (err || !blob) {
+            if (++tries < 6) { window.setTimeout(loadVoice, tries * 2000); return; }
+            au.insertAdjacentHTML("afterend", '<p class="need-incoming-hint">Their voice couldn’t be loaded yet. It stays in “Everything you two have asked for”, so you can play it there later.</p>');
+            return;
+          }
+          au.src = URL.createObjectURL(blob);
+        });
+      };
+      loadVoice();
     }
   }
   function wireIncomingRequest() {
@@ -2405,8 +2447,31 @@
             : r.noReply ? "No reply was needed" : (mine ? "No answer recorded" : "Not answered");
       return '<li><div class="dna-row-copy"><span class="title">' + escapeHtml(who + " could use " + String(r.title).toLowerCase()) + '</span>' +
         (r.note ? '<span class="sub">“' + escapeHtml(r.note) + '”</span>' : '') +
+        (r.hasVoice ? '<span class="sub"><button type="button" class="ambient-link" data-voice-req="' + escapeHtml(r.id) + '">' + (mine ? "Play your voice" : "Play " + escapeHtml(p) + "’s voice") + '</button></span>' : '') +
         '<span class="sub">' + escapeHtml(fmt.format(new Date(r.sentAt || 0)) + " · " + out) + '</span></div></li>';
     }).join("") + '</ul>';
+  }
+  // A voice request stays playable here, for both of you, long after the
+  // "needs you" card has gone. Loaded only when someone taps Play.
+  function wireNeedHistory() {
+    var body = document.getElementById("needHistoryBody");
+    if (!body) return;
+    body.addEventListener("click", function (e) {
+      var b = e.target.closest ? e.target.closest("[data-voice-req]") : null;
+      if (!b || b.disabled) return;
+      var id = b.getAttribute("data-voice-req");
+      b.disabled = true; b.textContent = "Loading…";
+      idbGetMedia(id, function (err, blob) {
+        if (err || !blob) { b.disabled = false; b.textContent = "Couldn’t load it. Tap to try again."; return; }
+        if (!MEDIA_URLS[id]) MEDIA_URLS[id] = URL.createObjectURL(blob);
+        var au = el("audio", "need-history-audio");
+        au.controls = true;
+        au.src = MEDIA_URLS[id];
+        if (b.parentNode) b.parentNode.replaceChild(au, b);
+        var playing = au.play && au.play();
+        if (playing && playing.catch) playing.catch(function () { });
+      });
+    });
   }
 
   // ---- Request side: "I could use…" ----
@@ -2493,6 +2558,12 @@
     });
 
     document.getElementById("needRequestSend").addEventListener("click", function () {
+      // Paused: say so before anything is written or uploaded, rather than
+      // keeping a recording nobody will receive.
+      if (SPACE.pairing && SPACE.pairing.status !== "joined") {
+        showToast("Your space is paused, so nothing was sent. Reconnect with " + SPACE.partner.name + " to share again.", true);
+        return;
+      }
       var note = document.getElementById("needRequestNote").value.trim();
       var noReply = document.getElementById("needNoReplyCheck").checked;
       var item = SPACE.needYou.filter(function (n) { return n.id === needRequestState.selectedId; })[0];
@@ -2511,7 +2582,13 @@
       var sendBtn = document.getElementById("needRequestSend");
       var deliver = function () {
         SPACE.sentRequests.push(reqItem);
-        if (!saveSentRequests()) return;      // not saved: the sheet stays open with everything still in it
+        if (!saveSentRequests()) {
+          // Not saved: the sheet stays open with everything still in it, and
+          // nothing half-sent is left behind to go out twice on the next try.
+          SPACE.sentRequests = SPACE.sentRequests.filter(function (r) { return r !== reqItem; });
+          if (reqItem.hasVoice) idbDeleteMedia(reqItem.id);
+          return;
+        }
         needRequestState.sent = true;
         closeOverlay("needRequestOverlay");
         showToast(isOffline()
@@ -10048,9 +10125,11 @@
           if (err) { setText("profileError", "Not saved. Try again."); return; }
           if (AVATAR_URLS[ME]) URL.revokeObjectURL(AVATAR_URLS[ME]);
           AVATAR_URLS[ME] = URL.createObjectURL(blob);
-          if (!mutate(function (db) { db.profiles[ME] = db.profiles[ME] || {}; db.profiles[ME].photoAt = Date.now(); }, { evenIfPaused: true })) {
+          var at = Date.now();
+          if (!mutate(function (db) { db.profiles[ME] = db.profiles[ME] || {}; db.profiles[ME].photoAt = at; }, { evenIfPaused: true })) {
             setText("profileError", "Not saved. Try again."); return;
           }
+          AVATAR_AT[ME] = at; noteAvatarCached(ME, at);
           refreshEverything();
           renderProfileOverlay();
           showToast("Photo updated. " + SPACE.partner.name + " sees it too.");
@@ -10061,6 +10140,7 @@
     if (removePhotoBtn) removePhotoBtn.addEventListener("click", function () {
       idbDeleteMedia(avatarPhotoId(ME), function () { });
       if (AVATAR_URLS[ME]) { URL.revokeObjectURL(AVATAR_URLS[ME]); delete AVATAR_URLS[ME]; }
+      delete AVATAR_AT[ME]; noteAvatarCached(ME, null);
       if (!mutate(function (db) { if (db.profiles[ME]) delete db.profiles[ME].photoAt; }, { evenIfPaused: true })) {
         setText("profileError", "Not saved. Try again."); return;
       }
@@ -11835,6 +11915,7 @@
     wireOverlays();
     wireCapture();
     wireNeedRequest();
+    wireNeedHistory();
     wireNeedResponses();
     wireImportFlow();
     wireLetterComposer();

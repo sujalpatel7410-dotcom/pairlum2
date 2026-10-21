@@ -862,7 +862,15 @@ ul{margin:0;padding:0;list-style:none}
 }
 
 .us-profile{display:flex;align-items:center;gap:16px;padding:20px 0}
-.us-avatar{width:66px;height:66px;border-radius:50%;background:linear-gradient(160deg,var(--wine-soft),var(--wine));flex:0 0 auto}
+/* Both of you, side by side: each a photo, or an initial until there is one */
+.us-avatars{display:flex;flex:0 0 auto}
+.us-avatar{
+  width:60px;height:60px;border-radius:50%;flex:0 0 auto;border:3px solid var(--paper);
+  display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:1.45rem;
+}
+.us-avatar--a{background:linear-gradient(160deg,var(--wine-soft),var(--wine));color:#fff}
+.us-avatar--b{background:linear-gradient(160deg,var(--gold-soft),var(--gold));color:var(--wine-deep);margin-left:-18px}
+@media (max-width:420px){.us-avatar{width:48px;height:48px;font-size:1.15rem}.us-avatar--b{margin-left:-14px}}
 .us-stats{display:flex;gap:26px;padding:18px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin:6px 0 20px}
 .us-stat b{display:block;font-family:var(--serif);font-size:1.4rem;color:var(--wine-text)}
 .us-stat span{font-size:.76rem;color:var(--ink-faint)}
@@ -1875,6 +1883,7 @@ body.reduced-motion .moment-heart.is-pop{animation:none}
 .need-incoming-note{font-family:var(--serif);font-size:.98rem;line-height:1.4;margin-top:8px;color:rgba(255,255,255,.86);overflow-wrap:anywhere}
 .need-incoming-hint{font-size:.78rem;margin-top:8px;color:rgba(255,255,255,.66)}
 .need-incoming-audio{width:100%;margin-top:10px;height:36px}
+.need-history-audio{width:100%;max-width:320px;height:36px;margin-top:4px}
 .need-incoming-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 .need-incoming-actions button{border-radius:999px;padding:10px 18px;min-height:40px;font-family:var(--font-ui);font-size:.84rem;font-weight:600;cursor:pointer}
 .need-incoming-here{border:1px solid var(--gold-soft);background:var(--gold-soft);color:#3D0F1C}
