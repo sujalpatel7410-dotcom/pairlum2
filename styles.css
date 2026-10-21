@@ -1155,6 +1155,13 @@ ul{margin:0;padding:0;list-style:none}
 }
 .space-paused-text{font-family:var(--font-display);font-size:1.15rem;color:var(--ink-soft);margin:8px auto 18px;max-width:40ch}
 .space-paused .first-chapter-cta{display:inline-flex}
+.space-paused-join{
+  display:block;margin:12px auto 0;border:none;background:none;cursor:pointer;padding:6px 4px;min-height:32px;
+  font-family:var(--font-ui);font-size:.84rem;font-weight:600;color:var(--wine-text);
+}
+.space-paused-join[hidden]{display:none}
+.space-paused-join:hover{color:var(--wine)}
+.space-paused-join:focus-visible{outline:2px solid var(--wine);outline-offset:2px}
 
 /* ==========================================================================
    Real video moments — play overlay instead of native controls, to stay
@@ -1248,6 +1255,8 @@ ul{margin:0;padding:0;list-style:none}
 .privacy-tag--shared{background:color-mix(in srgb,var(--wine) 12%,var(--white));color:var(--wine-text)}
 .privacy-tag--private{background:var(--paper-dim);color:var(--ink-faint)}
 .privacy-note{font-size:.78rem;color:var(--ink-faint);margin-top:10px;line-height:1.5}
+/* an invite link made on localhost, which only this computer can open */
+.local-link-note{margin:12px 0 0;padding:12px 14px;border-radius:var(--radius-m);background:color-mix(in srgb,var(--gold) 16%,transparent);color:var(--ink);font-size:.82rem;line-height:1.5}
 
 /* devices list */
 .device-row{display:flex;align-items:center;gap:12px;padding:12px 2px;border-bottom:1px solid var(--line-soft)}
@@ -1324,6 +1333,21 @@ ul{margin:0;padding:0;list-style:none}
   padding:8px 14px;font-size:.8rem;cursor:pointer;color:var(--ink-soft);flex:0 0 auto;
 }
 .invite-code-box button:hover{border-color:var(--wine);color:var(--wine-text)}
+/* "Join your partner", right under "Invite your partner" */
+.pairing-or{
+  display:flex;align-items:center;gap:12px;margin:26px 0 14px;
+  font-family:var(--font-mono);font-size:.66rem;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-faint);
+}
+.pairing-or::before,.pairing-or::after{content:"";flex:1 1 auto;height:1px;background:var(--line)}
+.pairing-join .disp-3{margin-top:0}
+.pairing-join-row{display:flex;align-items:center;gap:8px}
+.pairing-join-row .confirm-input{margin:0;flex:1 1 auto;min-width:0;font-family:var(--font-ui)}
+.pairing-join-paste{
+  flex:0 0 auto;min-height:44px;border:1px solid var(--line);background:var(--white);border-radius:999px;
+  padding:10px 16px;font-size:.8rem;cursor:pointer;color:var(--ink-soft);
+}
+.pairing-join-paste:hover{border-color:var(--wine);color:var(--wine-text)}
+.pairing-join-paste:focus-visible{outline:2px solid var(--wine);outline-offset:2px}
 .pairing-steps{margin:16px 0;display:flex;flex-direction:column;gap:10px}
 .pairing-step{display:flex;align-items:center;gap:10px;font-size:.86rem;color:var(--ink-faint)}
 .pairing-step.is-done{color:var(--ink)}

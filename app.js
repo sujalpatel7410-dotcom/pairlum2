@@ -3715,6 +3715,14 @@
     document.querySelectorAll("[data-action='open-pairing']").forEach(function (btn) {
       btn.addEventListener("click", function () { renderPairingOverlay(); openOverlay("pairingOverlay"); });
     });
+    // "Got a link from your partner?" — the same screen, ready to paste.
+    document.querySelectorAll("[data-action='open-pairing-join']").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        renderPairingOverlay(); openOverlay("pairingOverlay");
+        var input = document.getElementById("pairingPasteInput");
+        if (input) input.focus();
+      });
+    });
     document.querySelectorAll("[data-action='open-notifications']").forEach(function (btn) {
       btn.addEventListener("click", function () { renderNotifOverlay(); openOverlay("notifOverlay"); });
     });
@@ -7584,6 +7592,12 @@
   });
 
   // Two-partner preview: which partner this tab is. A real login replaces this.
+  // Pairlum opened from this computer itself (localhost while testing): a
+  // link made here can't be opened on anyone else's device.
+  function isLocalAddress() {
+    var h = String(location.hostname || "").toLowerCase();
+    return h === "localhost" || h === "::1" || h === "[::1]" || /^127\./.test(h) || /\.localhost$/.test(h);
+  }
   function wireViewingAs() {
     var box = document.getElementById("viewingAs");
     if (!box) return;
@@ -7782,6 +7796,9 @@
         not_started: "Invite your partner →", invite_ready: "Share your invite →", invite_expired: "Make a new link →",
         invite_offer: "See invitation →", invite_problem: "See what happened →", left: "Rejoin →"
       })[st] || "Reconnect →";
+      // …and right beside it, the way in for whoever was sent a link.
+      var joinCta = notice.querySelector("[data-action='open-pairing-join']");
+      if (joinCta) joinCta.hidden = !(window.PairlumSpace && window.PairlumSpace.isConfigured() && /^(not_started|invite_ready|invite_expired)$/.test(st));
     }
 
     if (fab) fab.style.display = paired ? "" : "none";
@@ -7826,15 +7843,25 @@
 
     html += '<div class="pairing-state">' + badge;
 
-    // Got a link but opened Pairlum some other way? Paste it here — it goes
-    // through the same "Join our Pairlum?" screen as opening the link itself.
-    var pasteInviteHtml =
-      '<p class="body-s" style="margin-top:16px"><button type="button" class="ambient-link" id="pairingPasteBtn">Got an invite link from your partner?</button></p>' +
-      '<div id="pairingPastePanel" hidden>' +
-      '<label class="field"><span class="field-label">Paste the invite link</span><input type="text" id="pairingPasteInput" class="confirm-input" placeholder="https://…/auth.html?invite=…" autocomplete="off" spellcheck="false"></label>' +
-      '<button class="btn-primary" id="pairingPasteGo" type="button" style="width:100%">Continue →</button>' +
-      '<p class="auth-note" id="pairingPasteNote" style="margin-top:8px"></p>' +
-      '</div>';
+    // Joining sits right under "Invite", always open: whoever was sent a link
+    // pastes it here. Often both partners tap "Invite" — joining one link
+    // cancels the other's (accept_pairing_invite). It goes through the same
+    // "Join our Pairlum?" screen as opening the link itself.
+    var canPaste = !!(navigator.clipboard && navigator.clipboard.readText);
+    var joinInviteHtml = function (haveOwnLink) {
+      return '<div class="pairing-or"><span>or</span></div>' +
+        '<div class="pairing-join" id="pairingJoinPanel">' +
+        '<h3 class="disp-3">Join your partner</h3>' +
+        '<p class="body-m">' + (haveOwnLink
+          ? 'Did your partner send you their link too? Join theirs instead — yours will stop working.'
+          : 'Did your partner already send you a link? Paste it here to join their Pairlum.') + '</p>' +
+        '<label class="field-label" for="pairingPasteInput">The link they sent you</label>' +
+        '<div class="pairing-join-row"><input type="text" id="pairingPasteInput" class="confirm-input" placeholder="https://…/auth.html?invite=…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go">' +
+        (canPaste ? '<button type="button" class="pairing-join-paste" id="pairingPasteFromClipboard">Paste</button>' : '') + '</div>' +
+        '<button class="btn-primary" id="pairingPasteGo" type="button" style="width:100%;margin-top:10px">Join →</button>' +
+        '<p class="auth-note" id="pairingPasteNote" style="margin-top:8px"></p>' +
+        '</div>';
+    };
     var expiresLabel = function (iso) {
       var t = Date.parse(iso || "");
       return isNaN(t) ? "" : new Intl.DateTimeFormat("en-US", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(new Date(t));
@@ -7846,7 +7873,7 @@
         '<p class="body-m">You’ll get a private link to send them any way you like — a message, a chat, an email. When they open it and tap Join, your shared space begins.</p>' +
         '<button class="btn-primary" id="pairingCreateInviteBtn" type="button" style="width:100%;margin-top:6px">Invite your partner →</button>' +
         '<p class="auth-note" id="pairingCreateNote" style="margin-top:8px"></p>' +
-        pasteInviteHtml;
+        joinInviteHtml(false);
     } else if (status === "not_started") {
       html +=
         '<h3 class="disp-3" style="margin-top:10px">Invite ' + escapeHtml(p.name) + ' to your Pairlum</h3>' +
@@ -7861,7 +7888,11 @@
         '<div class="invite-code-box"><span class="code" id="pairingInviteLink" style="font-size:.8rem;word-break:break-all;user-select:all">' + escapeHtml(inviteLink) + '</span><button type="button" id="pairingCopyBtn">Copy</button></div>' +
         '<button class="btn-primary" id="pairingShareBtn" type="button" style="width:100%;margin-top:10px">Share invite link →</button>' +
         '<p class="auth-note" id="pairingShareNote" style="margin-top:8px">' + (until ? "Works until " + escapeHtml(until) + "." : "") + ' This screen updates on its own when they join.</p>' +
-        '<div class="confirm-actions"><button class="btn-ghost" id="pairingCancelInviteBtn" type="button">Cancel invite</button></div>';
+        (isLocalAddress()
+          ? '<p class="local-link-note" id="pairingLocalNote"><b>This link only opens on this computer.</b> It starts with ' + escapeHtml(location.host) + ', which every device reads as itself. To try it now, paste it into a different browser here (Edge, if you are in Chrome) and sign up there as your partner. To invite someone on their own phone, put Pairlum online first: then links start with your site\'s address and open anywhere.</p>'
+          : "") +
+        '<div class="confirm-actions"><button class="btn-ghost" id="pairingCancelInviteBtn" type="button">Cancel invite</button></div>' +
+        joinInviteHtml(true);
     } else if (status === "invite_ready") {
       // Waiting, but this device doesn't have the link (it was made on
       // another device, or this browser's storage was cleared) — the
@@ -7871,14 +7902,15 @@
         '<p class="body-m">Your partner can still use the link you sent. To see it again here, make a new one — the old link will stop working.</p>' +
         '<button class="btn-primary" id="pairingCreateInviteBtn" type="button" style="width:100%;margin-top:6px">Make a new link →</button>' +
         '<p class="auth-note" id="pairingCreateNote" style="margin-top:8px"></p>' +
-        '<div class="confirm-actions"><button class="btn-ghost" id="pairingCancelInviteBtn" type="button">Cancel invite</button></div>';
+        '<div class="confirm-actions"><button class="btn-ghost" id="pairingCancelInviteBtn" type="button">Cancel invite</button></div>' +
+        joinInviteHtml(true);
     } else if (status === "invite_expired") {
       html +=
         '<h3 class="disp-3" style="margin-top:10px">Your invite expired</h3>' +
         '<p class="body-m">Invite links only work for a little while, to keep your space private. Make a new one and send it again.</p>' +
         '<button class="btn-primary" id="pairingCreateInviteBtn" type="button" style="width:100%;margin-top:6px">Make a new link →</button>' +
         '<p class="auth-note" id="pairingCreateNote" style="margin-top:8px"></p>' +
-        pasteInviteHtml;
+        joinInviteHtml(false);
     } else if (status === "invite_offer") {
       var from = SPACE.pairing.inviteFromName || "your partner";
       html +=
@@ -7974,21 +8006,36 @@
         if (note) note.textContent = err && err.message ? err.message : "Couldn't make a link. Try again.";
       });
     });
-    // ---- real mode: a link pasted in by hand ----
-    var pasteBtn = document.getElementById("pairingPasteBtn");
-    if (pasteBtn) pasteBtn.addEventListener("click", function () {
-      var panel = document.getElementById("pairingPastePanel");
-      panel.hidden = !panel.hidden;
-      if (!panel.hidden) document.getElementById("pairingPasteInput").focus();
-    });
+    // ---- real mode: joining with the link your partner sent ----
+    var pasteInput = document.getElementById("pairingPasteInput");
     var pasteGo = document.getElementById("pairingPasteGo");
-    if (pasteGo) pasteGo.addEventListener("click", function () {
-      var note = document.getElementById("pairingPasteNote");
-      if (!window.PairlumSpace.openInvite(document.getElementById("pairingPasteInput").value)) {
-        note.textContent = "That doesn't look like a Pairlum invite link. Copy the whole link your partner sent and try again.";
+    var pasteNote = document.getElementById("pairingPasteNote");
+    var joinWithLink = function () {
+      if (pasteGo.disabled) return;
+      if (!pasteInput.value.trim()) {
+        pasteNote.textContent = "Paste the link your partner sent you first.";
+        pasteInput.focus();
         return;
       }
-      pasteGo.disabled = true; note.textContent = "Checking your invite…";
+      if (!window.PairlumSpace.openInvite(pasteInput.value)) {
+        pasteNote.textContent = "That doesn't look like a Pairlum invite link. Copy the whole link your partner sent and try again.";
+        return;
+      }
+      pasteGo.disabled = true; pasteNote.textContent = "Checking their link…";
+    };
+    if (pasteGo) {
+      pasteGo.addEventListener("click", joinWithLink);
+      pasteInput.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); joinWithLink(); } });
+    }
+    var pasteClipBtn = document.getElementById("pairingPasteFromClipboard");
+    if (pasteClipBtn) pasteClipBtn.addEventListener("click", function () {
+      navigator.clipboard.readText().then(function (text) {
+        pasteInput.value = String(text || "").trim();
+        joinWithLink();
+      }, function () {
+        pasteInput.focus();
+        pasteNote.textContent = "Couldn't read what you copied. Click the box and press Ctrl+V — or on a phone, press and hold it and choose Paste.";
+      });
     });
 
     // ---- the link itself: copy, share (demo mode reuses the copy button) ----
