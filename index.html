@@ -46,7 +46,6 @@
     rel="stylesheet">
   <link rel="stylesheet" href="pairlum-core.css">
   <script src="pairlum-config.js?v=2"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="pairlum-core.js"></script>
   <script>
     /* Relationship Palette: one continuous journey — Warm Ivory to Dark Burgundy, easing to a softer neutral for the Book, grounding in Warm Charcoal. The app keeps its five moods. */
@@ -55,7 +54,6 @@
       var s = {}; try { s = JSON.parse(localStorage.getItem('pl-landing') || '{}') || {} } catch (e) { }
       var r = document.documentElement; r.dataset.quality = s.quality || 'auto';
       if (!PL.motion.ok()) r.classList.add('still');
-      if (!sessionStorage.getItem('pl-seen') && PL.motion.ok()) r.classList.add('preload');
       if (matchMedia('(hover:hover) and (pointer:fine)').matches) r.classList.add('fine');
     })();
   </script>
@@ -155,56 +153,6 @@
     .mono.dim,
     .dim {
       color: var(--muted)
-    }
-
-    /* ---------- preloader ---------- */
-    .loader {
-      display: none
-    }
-
-    .preload .loader {
-      display: flex;
-      position: fixed;
-      inset: 0;
-      z-index: 300;
-      align-items: flex-end;
-      justify-content: space-between;
-      padding: var(--gut);
-      background: var(--accent);
-      color: var(--on-accent);
-      transition: transform .9s cubic-bezier(.76, 0, .24, 1)
-    }
-
-    .loader .pl-wordmark {
-      color: inherit;
-      font-size: 1.2rem
-    }
-
-    .loader .pl-monogram {
-      color: inherit !important
-    }
-
-    .loader p {
-      margin: 10px 0 0;
-      font-size: .95rem;
-      max-width: 16ch
-    }
-
-    .loader b {
-      font: 600 clamp(5rem, 22vw, 18rem)/.8 var(--font-display);
-      letter-spacing: -.05em;
-      font-variant-numeric: tabular-nums
-    }
-
-    .loader small {
-      display: block;
-      text-align: right;
-      font-size: .95rem;
-      margin-top: 8px
-    }
-
-    .loaded .loader {
-      transform: translateY(-100%)
     }
 
     /* ---------- header, settings ---------- */
@@ -2363,23 +2311,11 @@
     [data-quality=low] .pile .m.ph {
       box-shadow: none
     }
-
-    @media(prefers-reduced-motion:reduce) {
-      .loader {
-        display: none !important
-      }
-    }
   </style>
 </head>
 
 <body>
   <a class="skip" href="#main">Skip to content</a>
-  <div class="loader" aria-hidden="true"><span><span class="pl-monogram"
-        style="font-size:2.6rem;display:block;margin-bottom:14px">P</span><span class="pl-wordmark">Pairlum</span>
-      <p>Your story is loading, please wait</p>
-    </span>
-    <div><b id="count">000</b><small>out of 100%</small></div>
-  </div>
   <div class="cur" aria-hidden="true"></div>
   <div class="cur-ring" aria-hidden="true"><span class="cl">Drag</span></div>
   <div class="stars" aria-hidden="true"></div>
@@ -2743,17 +2679,9 @@
       /* ---------- signed in? ---------- */
       if (PL.auth.signedIn()) { var st = $('#startLink'); st.href = PL.home(); st.querySelector('.long').textContent = 'Open Pairlum'; st.querySelector('.short').textContent = 'Open'; $('#loginLink').remove(); var ls = $('.login-s'); if (ls) ls.remove() }
 
-      /* ---------- preloader (first visit per session only) ---------- */
+      /* ---------- the hero comes in straight away: the landing page is the first and only front page ---------- */
       function heroIn() { $('#heroText').classList.add('is-in'); if (Heart) Heart.ready() }
-      (function () {
-        if (!root.classList.contains('preload')) { requestAnimationFrame(heroIn); return }
-        var el = $('#count'), t0 = null, dur = 1100;
-        function tick(t) {
-          if (t0 === null) t0 = t; var p = Math.min((t - t0) / dur, 1), e = 1 - Math.pow(1 - p, 3); el.textContent = String(Math.round(e * 100)).padStart(3, '0');
-          if (p < 1) requestAnimationFrame(tick); else setTimeout(function () { root.classList.add('loaded'); try { sessionStorage.setItem('pl-seen', '1') } catch (x) { } setTimeout(heroIn, 450) }, 180)
-        }
-        requestAnimationFrame(tick);
-      })();
+      requestAnimationFrame(heroIn);
 
       /* ---------- custom cursor (mouse only) ---------- */
       (function () {
