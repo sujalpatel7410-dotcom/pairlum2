@@ -2245,7 +2245,7 @@
       '<p class="need-incoming-title">' + escapeHtml(p.name) + ' could use ' + escapeHtml(String(r.title).toLowerCase()) + '</p>' +
       (r.note ? '<p class="need-incoming-note">“' + escapeHtml(r.note) + '”</p>' : '') +
       (r.hasVoice ? '<audio class="need-incoming-audio" controls preload="none"></audio>' : '') +
-      (r.noReply ? '<p class="need-incoming-hint">No reply needed — only if you want to.</p>' : '') +
+      (r.noReply ? '<p class="need-incoming-hint">No reply needed.</p>' : '') +
       '<div class="need-incoming-actions">' +
       '<button type="button" class="need-incoming-here" data-req-reply="here">I\'m here</button>' +
       '<button type="button" class="need-incoming-later" data-req-reply="later">Not right now</button>' +
@@ -2261,7 +2261,7 @@
           if (!au || box.getAttribute("data-req") !== r.id) return; // a newer request took its place
           if (err || !blob) {
             if (++tries < 6) { window.setTimeout(loadVoice, tries * 2000); return; }
-            au.insertAdjacentHTML("afterend", '<p class="need-incoming-hint">Their voice couldn’t be loaded yet. It stays in “Everything you two have asked for”, so you can play it there later.</p>');
+            au.insertAdjacentHTML("afterend", '<p class="need-incoming-hint">Their voice couldn’t load yet. Play it later from “Everything you two have asked for”.</p>');
             return;
           }
           au.src = URL.createObjectURL(blob);
@@ -2758,7 +2758,7 @@
     setText("chapterPreviewNote", note);
     setText("chapterNoteCount", document.getElementById("chapterNoteInput").value.length + " / 200");
     var span = chapterSpan(date, chapterEditState.id);
-    setText("chapterRunsLine", span ? (/^Since/.test(span) ? "Runs from " + span.slice(6) + " until today" : "Runs " + span) + ". Memories are filed under it by their dates." : "It runs until your next chapter starts. Memories are filed under it by their dates.");
+    setText("chapterRunsLine", span ? (/^Since/.test(span) ? "Runs from " + span.slice(6) + " until today" : "Runs " + span) + ". Memories file under it by date." : "It runs until your next chapter. Memories file under it by date.");
     // cover
     var cover = document.getElementById("chapterPreviewCover");
     cover.className = "photo ce-cover";
@@ -4399,7 +4399,7 @@
   }
   function startGooglePhotosImport() {
     if (!googleClientId()) {
-      setText("importPickNote", "Google Photos isn't switched on for this app yet. Use “From this phone or computer” for now.");
+      setText("importPickNote", "Google Photos isn't available yet. Use “From this phone or computer”.");
       return;
     }
     setText("importPickNote", "Opening Google sign-in…");
@@ -4840,7 +4840,7 @@
     setText("tlCount", entries.length ? entries.length + (entries.length === 1 ? " memory" : " memories") : "");
     if (!entries.length) {
       host.innerHTML = '<div class="tl-empty">' + emptyArt("timeline") + '<p class="body-m">Nothing here yet.</p>' +
-        '<p class="body-s">Bring in photos from before Pairlum and each one settles into place by the day it was taken.</p></div>';
+        '<p class="body-s">Bring in photos from before Pairlum. Each one is filed by the day it was taken.</p></div>';
       return;
     }
     // ---- Photos-style collections: All / Photos / Videos / Words --------
@@ -6411,7 +6411,7 @@
     if (!list) return;
     var me = SPACE.currentUser, p = SPACE.partner, plans = upcomingPlans();
     if (!plans.length) {
-      list.innerHTML = '<li class="plan-empty">' + emptyArt("plans") + '<span>Nothing planned yet. Add a call or a movie night and it shows in both your time zones.</span></li>';
+      list.innerHTML = '<li class="plan-empty">' + emptyArt("plans") + '<span>Nothing planned yet. Add a call or a movie night — it shows in both time zones.</span></li>';
       return;
     }
     list.innerHTML = plans.map(function (pl) {
@@ -7651,11 +7651,11 @@
       showToast("Part of that change wasn't saved — only the person who added something can change or remove it.", true);
     } else if (d.notice === "lost") {
       saveFailedAt = Date.now();
-      showToast("Some of your changes couldn't be saved because " + partnerName + " changed the same things at the same time. Please check and try again.", true);
+      showToast("Some changes weren't saved: " + partnerName + " changed the same things at the same time. Check and try again.", true);
     }
     window.clearTimeout(savePillTimer);
     if (d.state === "waiting") {
-      setSavePill(navigator.onLine === false ? "Offline — your changes are kept on this device and will save when you're back." : "Not saved yet — trying again…");
+      setSavePill(navigator.onLine === false ? "Offline — changes are kept here and will save when you're back." : "Not saved yet — trying again…");
     } else if (d.state === "refused") {
       saveFailedAt = Date.now();
       var why = String(d.message || "").trim();
@@ -7856,16 +7856,16 @@
       // Before anyone has joined, the real partner's name isn't known yet.
       var who = (window.PairlumSpace && window.PairlumSpace.isConfigured() && st !== "left") ? "your partner" : p.name;
       var copy = {
-        not_started: "Invite " + who + " to bring Shared Day to life — nothing shows here until you both join the same space.",
-        invite_sent: "Waiting on " + who + " to accept your invite before Shared Day can start.",
-        waiting: "Waiting on " + who + " to accept your invite before Shared Day can start.",
-        invite_ready: "Your invite link is ready. Shared Day starts the moment " + who + " opens it and taps Join.",
-        invite_expired: "Your invite link expired. Make a new one to bring Shared Day to life.",
+        not_started: "Invite " + who + " to start Shared Day — it stays empty until you both join.",
+        invite_sent: "Waiting on " + who + " to accept your invite.",
+        waiting: "Waiting on " + who + " to accept your invite.",
+        invite_ready: "Your invite link is ready. Shared Day starts when " + who + " taps Join.",
+        invite_expired: "Your invite link expired. Make a new one.",
         invite_offer: (SPACE.pairing.inviteFromName || "Your partner") + " invited you to their Pairlum. Open the invitation to join.",
-        invite_problem: "There's a problem with the invite link you opened. Open it to see what to do next.",
-        expired: "Your invite to " + who + " expired. Send a new one to bring Shared Day back.",
-        left: "You stepped away from this Pairlum. Nothing here was lost — rejoin whenever you're ready."
-      }[st] || ("Connect with " + who + " to bring Shared Day back to life.");
+        invite_problem: "There's a problem with the invite link you opened. Open it to see why.",
+        expired: "Your invite to " + who + " expired. Send a new one.",
+        left: "You left this Pairlum. Nothing was lost — rejoin any time."
+      }[st] || ("Connect with " + who + " to bring Shared Day back.");
       if (noticeText) noticeText.textContent = copy;
       // One button, labelled for what it actually leads to.
       var cta = notice.querySelector("[data-action='open-pairing']");
@@ -7931,7 +7931,7 @@
         '<h3 class="disp-3">Join your partner</h3>' +
         '<p class="body-m">' + (haveOwnLink
           ? 'Did your partner send you their link too? Join theirs instead — yours will stop working.'
-          : 'Did your partner already send you a link? Paste it here to join their Pairlum.') + '</p>' +
+          : 'Got a link from your partner? Paste it here to join.') + '</p>' +
         '<label class="field-label" for="pairingPasteInput">The link they sent you</label>' +
         '<div class="pairing-join-row"><input type="text" id="pairingPasteInput" class="confirm-input" placeholder="https://…/auth.html?invite=…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go">' +
         (canPaste ? '<button type="button" class="pairing-join-paste" id="pairingPasteFromClipboard">Paste</button>' : '') + '</div>' +
@@ -7947,7 +7947,7 @@
     if (status === "not_started" && isReal) {
       html +=
         '<h3 class="disp-3" style="margin-top:10px">Invite your partner</h3>' +
-        '<p class="body-m">You’ll get a private link to send them any way you like — a message, a chat, an email. When they open it and tap Join, your shared space begins.</p>' +
+        '<p class="body-m">You’ll get a private link to send them however you like. When they tap Join, your shared space begins.</p>' +
         '<button class="btn-primary" id="pairingCreateInviteBtn" type="button" style="width:100%;margin-top:6px">Invite your partner →</button>' +
         '<p class="auth-note" id="pairingCreateNote" style="margin-top:8px"></p>' +
         joinInviteHtml(false);
@@ -7961,12 +7961,12 @@
       var until = expiresLabel(SPACE.pairing.inviteExpiresAt);
       html +=
         '<h3 class="disp-3" style="margin-top:10px">Send this link to your partner</h3>' +
-        '<p class="body-m">It works once, for one person. Anyone who opens it could join, so send it only to them. Your Shared Day starts the moment they tap Join.</p>' +
+        '<p class="body-m">It works once, for one person — anyone who opens it could join, so send it only to them.</p>' +
         '<div class="invite-code-box"><span class="code" id="pairingInviteLink" style="font-size:.8rem;word-break:break-all;user-select:all">' + escapeHtml(inviteLink) + '</span><button type="button" id="pairingCopyBtn">Copy</button></div>' +
         '<button class="btn-primary" id="pairingShareBtn" type="button" style="width:100%;margin-top:10px">Share invite link →</button>' +
-        '<p class="auth-note" id="pairingShareNote" style="margin-top:8px">' + (until ? "Works until " + escapeHtml(until) + "." : "") + ' This screen updates on its own when they join.</p>' +
+        '<p class="auth-note" id="pairingShareNote" style="margin-top:8px">' + (until ? "Works until " + escapeHtml(until) + "." : "") + ' This screen updates when they join.</p>' +
         (isLocalAddress()
-          ? '<p class="local-link-note" id="pairingLocalNote"><b>This link only opens on this computer.</b> It starts with ' + escapeHtml(location.host) + ', which every device reads as itself. To try it now, paste it into a different browser here (Edge, if you are in Chrome) and sign up there as your partner. To invite someone on their own phone, put Pairlum online first: then links start with your site\'s address and open anywhere.</p>'
+          ? '<p class="local-link-note" id="pairingLocalNote"><b>This link only opens on this computer.</b> It starts with ' + escapeHtml(location.host) + ', which every device reads as itself. To test, open it in another browser here and sign up as your partner. Links from your live site open anywhere.</p>'
           : "") +
         '<div class="confirm-actions"><button class="btn-ghost" id="pairingCancelInviteBtn" type="button">Cancel invite</button></div>' +
         joinInviteHtml(true);
@@ -7976,7 +7976,7 @@
       // database keeps only a fingerprint of it, so it can't be shown again.
       html +=
         '<h3 class="disp-3" style="margin-top:10px">Your invite is waiting</h3>' +
-        '<p class="body-m">Your partner can still use the link you sent. To see it again here, make a new one — the old link will stop working.</p>' +
+        '<p class="body-m">Your partner can still use the link you sent. It can’t be shown again here; a new link replaces it.</p>' +
         '<button class="btn-primary" id="pairingCreateInviteBtn" type="button" style="width:100%;margin-top:6px">Make a new link →</button>' +
         '<p class="auth-note" id="pairingCreateNote" style="margin-top:8px"></p>' +
         '<div class="confirm-actions"><button class="btn-ghost" id="pairingCancelInviteBtn" type="button">Cancel invite</button></div>' +
@@ -7984,7 +7984,7 @@
     } else if (status === "invite_expired") {
       html +=
         '<h3 class="disp-3" style="margin-top:10px">Your invite expired</h3>' +
-        '<p class="body-m">Invite links only work for a little while, to keep your space private. Make a new one and send it again.</p>' +
+        '<p class="body-m">Invite links expire to keep your space private. Make a new one and send it.</p>' +
         '<button class="btn-primary" id="pairingCreateInviteBtn" type="button" style="width:100%;margin-top:6px">Make a new link →</button>' +
         '<p class="auth-note" id="pairingCreateNote" style="margin-top:8px"></p>' +
         joinInviteHtml(false);
@@ -7992,7 +7992,7 @@
       var from = SPACE.pairing.inviteFromName || "your partner";
       html +=
         '<h3 class="disp-3" style="margin-top:10px">' + escapeHtml(from) + ' invited you to their Pairlum</h3>' +
-        '<p class="body-m">When you join, the two of you share one private space: Shared Day, Our Story, Letters and everything else here, seen only by you two.</p>' +
+        '<p class="body-m">Join to share one private space — Shared Day, Our Story, Letters and more — just for you two.</p>' +
         '<p class="auth-note" id="pairingJoinNote" style="margin-top:8px"></p>' +
         '<div class="confirm-actions"><button class="btn-ghost" id="pairingDeclineInviteBtn" type="button">Not now</button><button class="btn-primary" id="pairingJoinInviteBtn" type="button">Join our Pairlum →</button></div>';
     } else if (status === "invite_problem") {
@@ -8031,15 +8031,15 @@
     } else if (status === "left") {
       html +=
         '<h3 class="disp-3" style="margin-top:10px">You left this Pairlum</h3>' +
-        '<p class="body-m">Nothing was deleted, and ' + escapeHtml(p.name) + ' still has everything exactly as it was. Rejoin whenever you\'re ready — same space, right where you left it.</p>' +
+        '<p class="body-m">Nothing was deleted, and ' + escapeHtml(p.name) + ' still has everything. Rejoin any time — same space, as you left it.</p>' +
         '<button class="btn-primary" id="pairingRejoinBtn" type="button" style="width:100%;margin-top:6px">Rejoin →</button>';
     } else { // joined
       var joinedLabel = new Intl.DateTimeFormat("en-US", { day: "numeric", month: "long", year: "numeric" }).format(new Date(SPACE.pairing.joinedAt));
       html +=
         '<h3 class="disp-3" style="margin-top:10px">' + escapeHtml(p.name) + ' is here. Your space is ready.</h3>' +
-        '<p class="body-m">You\'ve shared this space since ' + joinedLabel + '. Everything in Shared Day, Our Story and Letters lives only between the two of you.</p>' +
+        '<p class="body-m">You\'ve shared this space since ' + joinedLabel + '. Shared Day, Our Story and Letters are just for the two of you.</p>' +
         '<div class="danger-row" style="margin-top:8px">' +
-        '<div class="copy"><span class="title">Disconnect relationship</span><span class="sub">Ends the live connection between you — explained before you confirm.</span></div>' +
+        '<div class="copy"><span class="title">Disconnect relationship</span><span class="sub">Ends the connection between you. You’ll see what happens first.</span></div>' +
         '<button class="btn-danger" id="pairingDisconnectBtn" type="button">Disconnect</button>' +
         '</div>' +
         '<div class="danger-row" style="margin-top:8px">' +
@@ -8111,7 +8111,7 @@
         joinWithLink();
       }, function () {
         pasteInput.focus();
-        pasteNote.textContent = "Couldn't read what you copied. Click the box and press Ctrl+V — or on a phone, press and hold it and choose Paste.";
+        pasteNote.textContent = "Couldn't read what you copied. Click the box and press Ctrl+V, or press and hold it and choose Paste.";
       });
     });
 
@@ -8128,7 +8128,7 @@
       // invite_ready (real mode) copies the link; invite_sent/waiting (demo
       // mode) copies a code-only message instead.
       var text = inviteLinkEl ? inviteLinkEl.textContent : ("Join me on Pairlum — code " + (SPACE.pairing.inviteCode || ""));
-      var manual = function () { showToast(selectInviteLink() ? "Couldn't copy automatically — the link is selected, so press Ctrl+C (or long-press and Copy)." : text); };
+      var manual = function () { showToast(selectInviteLink() ? "Couldn't copy. The link is selected — press Ctrl+C or long-press and Copy." : text); };
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(function () { showToast("Invite link copied."); }, manual);
       } else manual();
@@ -8246,13 +8246,13 @@
       '<div class="confirm-panel">' +
       '<button class="overlay-back" type="button" id="disconnectBack">← Back</button>' +
       '<h4>Disconnect ' + escapeHtml(p.name) + '?</h4>' +
-      '<p class="body-m">Here\'s exactly what happens if you do:</p>' +
+      '<p class="body-m">What happens:</p>' +
       '<ul>' +
-      '<li>Shared moments stay visible to both of you, but become read-only — no new ones can be added to them.</li>' +
-      '<li>Private moments (only ever visible to you) are untouched.</li>' +
-      '<li>Letters already written stay exactly as they are, still opening on their dates.</li>' +
-      '<li>Imported memories from before Pairlum remain in Our Story.</li>' +
-      '<li>Your relationship history is kept — disconnecting pauses the space, it does not erase it.</li>' +
+      '<li>Shared moments stay visible to both of you, but become read-only.</li>' +
+      '<li>Private moments are untouched.</li>' +
+      '<li>Letters already written still open on their dates.</li>' +
+      '<li>Imported memories stay in Our Story.</li>' +
+      '<li>Nothing is erased — the space is paused.</li>' +
       '</ul>' +
       '<label class="confirm-check"><input type="checkbox" id="disconnectUnderstand"><span>I understand this pauses our shared space.</span></label>' +
       '<div class="confirm-actions">' +
@@ -8297,12 +8297,12 @@
       '<div class="confirm-panel">' +
       '<button class="overlay-back" type="button" id="leaveBack">← Back</button>' +
       '<h4>Leave this Pairlum?</h4>' +
-      '<p class="body-m">This is lighter than disconnecting. Here\'s exactly what happens:</p>' +
+      '<p class="body-m">Lighter than disconnecting:</p>' +
       '<ul>' +
-      '<li>' + escapeHtml(p.name) + ' keeps this space exactly as it is — nothing changes on their side.</li>' +
+      '<li>' + escapeHtml(p.name) + ' keeps this space as it is.</li>' +
       '<li>Nothing is deleted, hidden from ' + escapeHtml(p.name) + ', or made read-only.</li>' +
-      '<li>You can rejoin instantly, any time, with one tap — no new invite needed.</li>' +
-      '<li>Your connection with ' + escapeHtml(p.name) + ' is not ended. If you want to end it instead, use Disconnect.</li>' +
+      '<li>Rejoin any time with one tap — no new invite needed.</li>' +
+      '<li>Your connection with ' + escapeHtml(p.name) + ' is not ended. To end it, use Disconnect.</li>' +
       '</ul>' +
       '<div class="confirm-actions">' +
       '<button class="btn-ghost" id="leaveCancelBtn" type="button">Never mind</button>' +
@@ -8381,14 +8381,14 @@
       ["Voice notes you send", "shared"],
       ["Parallel Moments", "shared"],
       ["Letters addressed to " + p.name, "shared"],
-      ["The sound around you (your recorded clip, until you remove it)", "shared"],
+      ["Your recorded sound clip, until you remove it", "shared"],
       ["Live sound — only after you tap Allow, only until you stop", "shared"],
-      ["Moments still saved only on this device (not yet sent)", "private"],
-      ["This device's local settings (quiet hours, sound, reduced motion)", "private"]
+      ["Moments not yet sent", "private"],
+      ["This device's settings (quiet hours, sound, motion)", "private"]
     ].forEach(function (row) {
       html += '<div class="privacy-item"><span class="label">' + escapeHtml(row[0]) + '</span><span class="privacy-tag privacy-tag--' + row[1] + '">' + (row[1] === "shared" ? "Shared with " + escapeHtml(p.name) : "Private to me") + '</span></div>';
     });
-    html += '<p class="privacy-note">Distance' + (distanceText() ? ' (' + distanceText() + ')' : '') + ' is calculated only from the cities you both entered when you set up your space — Pairlum never reads live location. Photos you import are normally saved without the hidden location data cameras add. Two exceptions keep whatever the file holds: imported videos, and a photo this browser cannot convert (some HEIC files).</p></div>';
+    html += '<p class="privacy-note">Distance' + (distanceText() ? ' (' + distanceText() + ')' : '') + ' comes only from the cities you both entered — Pairlum never reads live location. Imported photos are saved without their hidden location data, except videos and photos this browser can\'t convert (some HEIC files).</p></div>';
 
     var liveLogHtml = DB.liveLog.slice().reverse().slice(0, 8).map(function (en) {
       var when = new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(new Date(en.at));
@@ -8396,29 +8396,29 @@
       var dur = Math.floor(en.secs / 60) + ":" + pad2(en.secs % 60);
       return '<div class="privacy-item"><span class="label">' + escapeHtml(who) + '</span><span class="privacy-tag privacy-tag--private">' + escapeHtml(when + " · " + dur) + '</span></div>';
     }).join("");
-    if (DB.liveLog.length > 8) liveLogHtml += '<p class="field-hint">The 8 most recent of ' + DB.liveLog.length + ' are shown. All of them are kept and are in your export.</p>';
+    if (DB.liveLog.length > 8) liveLogHtml += '<p class="field-hint">Showing 8 of ' + DB.liveLog.length + '. All are kept and included in your export.</p>';
     html += '<div class="overlay-section privacy-core-q"><div class="overlay-section-head"><h4>Can ' + escapeHtml(p.name) + ' hear me?</h4></div>' +
-      '<p class="body-m">Only when you say yes. Every live request shows you a prompt, and nothing is ever allowed in advance. You choose each time whether to share your surroundings or just your voice. Pairlum does not record live sound, and your microphone turns off the moment either of you stops, after 15 minutes, or if Pairlum sits in the background for 2 minutes.</p>' +
-      toggleRow("liveRequestsToggle", "Let " + escapeHtml(p.name) + " ask to listen live", "Turn this off and requests never reach you. " + escapeHtml(p.name) + " only sees that you can't share right now.", liveRequestsAllowed(ME)) +
+      '<p class="body-m">Only when you say yes — every request asks you first, and you choose your surroundings or just your voice. Live sound is never recorded. Your microphone turns off when either of you stops, after 15 minutes, or after 2 minutes in the background.</p>' +
+      toggleRow("liveRequestsToggle", "Let " + escapeHtml(p.name) + " ask to listen live", "Off: requests never reach you, and " + escapeHtml(p.name) + " only sees that you can't share right now.", liveRequestsAllowed(ME)) +
       '<p class="eyebrow" style="margin-top:14px">Live listening history</p>' +
       (liveLogHtml || '<p class="privacy-note">No live listening yet. Every session is listed here for both of you.</p>') +
       '</div>';
 
     html += '<div class="overlay-section privacy-core-q"><div class="overlay-section-head"><h4>Can ' + escapeHtml(p.name) + ' save it?</h4></div>' +
       toggleRow("mpSaveOriginals", "Save your originals", "Otherwise " + escapeHtml(p.name) + " can view but not download full-quality photos and videos you share.", mp.partnerCanSaveOriginals) +
-      toggleRow("mpDownloadVideo", "Download your videos", "Turn this off to keep videos view-only inside Pairlum.", mp.partnerCanDownloadVideo) +
-      '<p class="privacy-note">These switches decide what goes into ' + escapeHtml(p.name) + '\'s export (the only download Pairlum offers): with them off, your photos and videos are left out of it and stay in yours. No app can stop someone taking a screenshot or filming a screen.</p>' +
+      toggleRow("mpDownloadVideo", "Download your videos", "Off: your videos are view-only in Pairlum.", mp.partnerCanDownloadVideo) +
+      '<p class="privacy-note">These decide what goes into ' + escapeHtml(p.name) + '\'s export, the only download Pairlum offers. With them off, your photos and videos stay in yours only. No app can stop a screenshot or screen recording.</p>' +
       '</div>';
 
     html += '<div class="overlay-section privacy-core-q"><div class="overlay-section-head"><h4>What happens if we disconnect?</h4></div>' +
-      '<p class="body-m">' + escapeHtml(joinedLabel) + '. If you disconnect, everything you\'ve already shared stays exactly as it is for both of you — it just stops growing. Nothing is deleted by disconnecting.</p>' +
+      '<p class="body-m">' + escapeHtml(joinedLabel) + '. If you disconnect, everything already shared stays for both of you — it just stops growing. Nothing is deleted.</p>' +
       '<div class="danger-row"><div class="copy"><span class="title">Manage the connection</span><span class="sub">Invite, resend, leave, or disconnect ' + escapeHtml(p.name) + '.</span></div><button class="btn-ghost" id="privacyOpenPairingBtn" type="button">Open →</button></div>' +
       '</div>';
 
     html += '<div class="overlay-section privacy-core-q"><div class="overlay-section-head"><h4>Can Pairlum read what I say?</h4></div>' +
-      '<p class="body-m">Only if you switch it on, and only for your own recordings. A write-up is the words, a short title, a feeling and the topics, so a voice note can be found again months later.</p>' +
-      toggleRow("understandToggle", "Write up my recordings", "Your voice notes and clips are sent to Pairlum's understanding service to be written up. The service keeps the words, not the sound. " + escapeHtml(p.name) + " decides separately for theirs.", understandAllowed(ME)) +
-      '<p class="field-hint">' + (understandCfg() ? "Recordings you make from now on are written up automatically, and earlier ones a few at a time." : "The understanding service is not connected in this preview, so nothing is sent anywhere. Your choice is remembered for when it is.") + '</p>' +
+      '<p class="body-m">Only if you switch it on, and only your own recordings. A write-up — the words, a title, a feeling and topics — lets you find a voice note months later.</p>' +
+      toggleRow("understandToggle", "Write up my recordings", "Your voice notes and clips go to Pairlum's understanding service, which keeps the words, not the sound. " + escapeHtml(p.name) + " decides separately for theirs.", understandAllowed(ME)) +
+      '<p class="field-hint">' + (understandCfg() ? "New recordings are written up automatically; earlier ones a few at a time." : "The understanding service isn't connected yet, so nothing is sent. Your choice is saved for when it is.") + '</p>' +
       '</div>';
 
     // Advanced controls, deliberately lower — not the first thing a couple
@@ -8428,12 +8428,12 @@
     html += '<div class="overlay-section"><div class="overlay-section-head"><h4>Devices &amp; sessions</h4></div><div id="privacyDevicesList"></div></div>';
 
     html += '<div class="overlay-section"><div class="overlay-section-head"><h4>Your data</h4></div>' +
-      '<div class="danger-row"><div class="copy"><span class="title">Export your Pairlum</span><span class="sub">Download everything in your space as one .zip file, photos, videos and voice included.</span></div><button class="btn-ghost" id="privacyExportBtn" type="button">Export</button></div>' +
+      '<div class="danger-row"><div class="copy"><span class="title">Export your Pairlum</span><span class="sub">Everything in your space as one .zip, with photos, videos and voice.</span></div><button class="btn-ghost" id="privacyExportBtn" type="button">Export</button></div>' +
       (isRealBackend()
         // Restoring a file would replace the shared record for both of you,
         // newer things your partner added included — so with a real backend
         // there's nothing to restore from: the server already keeps it.
-        ? '<div class="danger-row"><div class="copy"><span class="title">Kept safe on Pairlum\'s server</span><span class="sub">Your space is saved for both of you as you go, so there\'s nothing to restore from a file. Export still gives you your own full copy.</span></div></div>'
+        ? '<div class="danger-row"><div class="copy"><span class="title">Kept safe on Pairlum\'s server</span><span class="sub">Your space saves as you go, so there\'s nothing to restore. Export still gives you a full copy.</span></div></div>'
         : '<div class="danger-row"><div class="copy"><span class="title">Restore from a backup</span><span class="sub">Put back an export you downloaded earlier.</span></div><button class="btn-ghost" id="privacyRestoreBtn" type="button">Restore</button></div>') +
       '<div class="danger-row"><div class="copy"><span class="title">Recently Deleted</span><span class="sub">' + escapeHtml(trashSummary()) + '</span></div><button class="btn-ghost" id="privacyTrashBtn" type="button">Open →</button></div>' +
       '<div class="danger-row"><div class="copy"><span class="title">Delete my account</span><span class="sub">Permanently removes your access. Always confirmed first.</span></div><button class="btn-danger" id="privacyDeleteBtn" type="button">Delete →</button></div>' +
@@ -8452,13 +8452,13 @@
     wireToggle("mpDownloadVideo", function (on) { mp.partnerCanDownloadVideo = on; saveMediaPolicy(); });
     wireToggle("understandToggle", function (on) {
       if (!mutate(function (db) { if (!db.prefs[ME]) db.prefs[ME] = {}; db.prefs[ME].understand = on; }, { evenIfPaused: true })) { renderPrivacyMain(); return; }
-      showToast(on ? (understandCfg() ? "On. Your recordings will be written up." : "On. Nothing is sent until the service is connected.") : "Off. Your recordings are not sent to be written up.");
+      showToast(on ? (understandCfg() ? "On. Your recordings will be written up." : "On. Nothing is sent until the service is connected.") : "Off. Your recordings aren't sent.");
       if (on) resumeUnderstanding();
     });
     wireToggle("liveRequestsToggle", function (on) {
       if (!mutate(function (db) { if (!db.prefs[ME]) db.prefs[ME] = {}; db.prefs[ME].liveRequests = on; }, { evenIfPaused: true })) { renderPrivacyMain(); return; }
       if (!on && LS.share.state === "incoming") liveDecline();
-      showToast(on ? SPACE.partner.name + " can ask to listen live again." : "Live requests are off. Nothing reaches you until you turn this back on.");
+      showToast(on ? SPACE.partner.name + " can ask to listen live again." : "Live requests are off.");
     });
     document.getElementById("privacyOpenPairingBtn").addEventListener("click", function () {
       closeOverlay("privacyOverlay");
@@ -8476,8 +8476,8 @@
      Restore puts it back for both of you; Delete now clears it for good. */
   function trashSummary() {
     var n = myTrash().length;
-    return n ? n + (n === 1 ? " thing" : " things") + " you removed, kept for 30 days in case you change your mind."
-      : "Nothing here. What you remove is kept for 30 days in case you change your mind.";
+    return n ? n + (n === 1 ? " thing" : " things") + " you removed, kept for 30 days."
+      : "Nothing here. What you remove is kept for 30 days.";
   }
   function trashEntryLabel(t) {
     var it = t.item || {}, title;
@@ -8495,7 +8495,7 @@
     var html = '<div class="confirm-panel">' +
       '<button class="overlay-back" type="button" id="trashBack">← Back</button>' +
       '<h4>Recently Deleted</h4>' +
-      '<p class="body-s">What you remove waits here for 30 days, hidden from both of you, in case you change your mind. Then it is cleared for good, with its photo.</p>';
+      '<p class="body-s">What you remove waits here for 30 days, hidden from both of you, then is cleared for good with its photo.</p>';
     if (!list.length) html += '<p class="privacy-note">Nothing here.</p>';
     else html += '<ul class="trash-list">' + list.map(function (t) {
       var l = trashEntryLabel(t);
@@ -9192,11 +9192,11 @@
     var bare = all.filter(function (r) { var u = understoodOf(r.recId); return !(u && u.status === "ready"); }).length;
     var asked = q.trim() || who || feeling || media;
     var lines = [];
-    if (!all.length) lines.push("No voice notes or clips yet. Everything you two record will be findable here.");
-    else if (!res.length) lines.push("Nothing matches that. Try a word from what was said, a name, a month, or a feeling.");
+    if (!all.length) lines.push("No voice notes or clips yet. Everything you record can be found here.");
+    else if (!res.length) lines.push("No matches. Try a word, a name, a month or a feeling.");
     else lines.push((asked ? res.length + (res.length === 1 ? " match" : " matches") : res.length + " recordings, newest first") + (res.length > shown.length ? " (showing " + shown.length + ")" : "") + ".");
     if (bare && all.length) lines.push(bare + (bare === 1 ? " recording has" : " recordings have") + " no write-up yet, so " + (bare === 1 ? "it" : "they") + " can only be found by person, date and what " + (bare === 1 ? "it is" : "they are") + " attached to.");
-    lines.push(understandCfg() ? "Matching by meaning comes from Pairlum's understanding service." : "This preview matches words, feelings, people, dates and attachments. Matching by meaning needs the understanding service, which is not connected here.");
+    lines.push(understandCfg() ? "Matching by meaning comes from Pairlum's understanding service." : "Matches words, feelings, people, dates and attachments. Matching by meaning isn't connected yet.");
     note.innerHTML = lines.map(function (l) { return "<p>" + escapeHtml(l) + "</p>"; }).join("");
   }
   function askServiceSearch() {
@@ -9458,8 +9458,8 @@
       '<div class="confirm-panel">' +
       '<button class="overlay-back" type="button" id="exportBack">← Back</button>' +
       '<h4>Export your Pairlum</h4>' +
-      '<p class="body-m">This downloads one .zip file with everything in your space: moments, notes, chapters, letters, plans, daily answers, “I could use…” requests and your settings, together with the photos, videos and voice recordings held on this device.</p>' +
-      '<p class="body-s">Two things are left out on purpose. A letter ' + pn + ' sealed for a later day is exported still sealed, without its words. And ' + pn + '’s photos and videos are only included if ' + pn + ' has switched on saving for you.</p>' +
+      '<p class="body-m">One .zip with everything in your space — moments, notes, chapters, letters, plans, daily answers, requests and settings — plus the photos, videos and voice recordings on this device.</p>' +
+      '<p class="body-s">Left out on purpose: the words of letters ' + pn + ' sealed for a later day, and ' + pn + '’s photos and videos unless ' + pn + ' allows saving.</p>' +
       '<p class="body-s" id="exportStatusLine" style="margin-top:14px" aria-live="polite"></p>' +
       '<div class="confirm-actions"><button class="btn-primary" id="exportConfirmBtn" type="button">Prepare export</button></div>' +
       '</div>';
@@ -9749,8 +9749,8 @@
       '<button class="overlay-back" type="button" id="deleteBack">← Back</button>' +
       '<h4>Delete your account</h4>' +
       (isRealBackend()
-        ? '<p class="body-m">This is permanent and can\'t be undone. Your login is deleted and you\'re signed out. Your pairing ends for both of you, the same as disconnecting.</p>' +
-          '<p class="body-s">Removed: your profile, and the moments, notes, letters, memories and plans you added, with your photos, clips and recordings. Everything ' + escapeHtml(SPACE.partner.name) + ' added, including their photos and voice notes, stays with them.</p>'
+        ? '<p class="body-m">This can\'t be undone. Your login is deleted, you\'re signed out, and your pairing ends for both of you, as with disconnecting.</p>' +
+          '<p class="body-s">Removed: your profile and everything you added, with your photos, clips and recordings. What ' + escapeHtml(SPACE.partner.name) + ' added stays with them.</p>'
         : '<p class="body-m">This is permanent. In the full product, this removes your access entirely and lets ' + escapeHtml(SPACE.partner.name) + ' know your account was deleted; your shared history\'s fate follows the same rules as disconnecting.</p>' +
           '<p class="body-s">This demo has no server. Confirming removes what is yours from this device: your profile, the moments, notes, letters, memories and plans you added, your recordings, and this device\'s settings. Everything ' + escapeHtml(SPACE.partner.name) + ' added, including their photos and voice notes, stays.</p>') +
       '<label class="body-s" style="display:block;margin-top:14px">Type <b>DELETE</b> to confirm</label>' +
@@ -10058,7 +10058,7 @@
       '<button type="button" class="profile-avatar" id="profileAvatar" aria-label="' + (me.photoAt ? "Change your photo" : "Add a photo") + '"><span id="profileAvatarLetter">' + escapeHtml(me.initial) + '</span></button>' +
       '<input type="file" accept="image/*" id="profilePhotoInput" hidden>' +
       '<span class="profile-avatar-copy">' +
-      '<span class="body-s">Tap the circle to ' + (me.photoAt ? "change" : "add") + ' your photo. It follows your name everywhere in Pairlum.</span>' +
+      '<span class="body-s">Tap the circle to ' + (me.photoAt ? "change" : "add") + ' your photo.</span>' +
       (me.photoAt ? '<button type="button" class="ambient-link" id="profilePhotoRemoveBtn">Remove photo</button>' : '') +
       '</span>' +
       '</div>' +
@@ -10072,12 +10072,12 @@
       '<div class="overlay-section">' +
       '<div class="overlay-section-head"><h4>The two of you</h4></div>' +
       '<label class="field"><span class="field-label">Together since</span><input type="date" id="profileStart" class="confirm-input" max="' + isoFromDate(new Date()) + '" value="' + escapeHtml(SPACE.relationshipStart) + '"></label>' +
-      '<p class="field-hint">This date belongs to both of you — either of you can change it, and it sets your anniversary and your day count.</p>' +
+      '<p class="field-hint">Shared by you both — either of you can change it. It sets your anniversary and day count.</p>' +
       '<label class="field"><span class="field-label">Your shared day starts at midnight in</span><select id="profileSpaceTz" class="confirm-input">' +
       [[me.timezone, me.city], [p.timezone, p.city]].map(function (z) { return '<option value="' + escapeHtml(z[0]) + '"' + (z[0] === spaceTz() ? " selected" : "") + '>' + escapeHtml(z[1]) + '</option>'; }).join("") +
       ([me.timezone, p.timezone].indexOf(spaceTz()) < 0 ? '<option value="' + escapeHtml(spaceTz()) + '" selected>' + escapeHtml(spaceTz().replace(/_/g, " ")) + '</option>' : '') +
       '</select></label>' +
-      '<p class="field-hint">One clock decides when “today” turns over for both of you: today\'s question, how today feels, Shared Day, the garden, and the day a sealed letter opens. Each moment still shows its own local time.</p>' +
+      '<p class="field-hint">When “today” turns over for both of you — the daily question, Shared Day, the garden and sealed letters. Moments still show their own local time.</p>' +
       '</div>' +
       '<div class="overlay-section">' +
       '<div class="overlay-section-head"><h4>' + escapeHtml(p.realName) + '</h4></div>' +
@@ -10091,7 +10091,7 @@
       '</form>' +
       (window.PairlumSpace && window.PairlumSpace.isConfigured() ?
         '<div class="overlay-section"><div class="overlay-section-head"><h4>Account</h4></div>' +
-        '<div class="danger-row"><div class="copy"><span class="title">Log out</span><span class="sub">Ends your session on this device. Nothing in your space is deleted.</span></div><button class="btn-ghost" id="profileSignOutBtn" type="button">Log out</button></div>' +
+        '<div class="danger-row"><div class="copy"><span class="title">Log out</span><span class="sub">Signs you out on this device. Nothing is deleted.</span></div><button class="btn-ghost" id="profileSignOutBtn" type="button">Log out</button></div>' +
         '</div>' : '');
 
     var cityInput = document.getElementById("profileCity"), zoneRow = document.getElementById("profileZoneRow");
@@ -10100,7 +10100,7 @@
       zoneRow.hidden = !!c;
       setText("profileCityHint", !cityInput.value.trim() ? ""
         : c ? "Time zone and distance are set from this city. Pairlum never reads your live location."
-          : "Pairlum doesn't know this city yet, so choose your time zone below. The distance between you won't be shown.");
+          : "Pairlum doesn't know this city yet — choose your time zone below. Distance won't be shown.");
     };
     paintCity();
     cityInput.addEventListener("input", paintCity);
@@ -10209,9 +10209,9 @@
       '</div>' +
       '<div class="overlay-section">' +
       toggleRow("reunionShowHome", "Show the countdown on Home", "The ring and your plans, on your Home screen.", SPACE.custom.homeHidden.indexOf("reunion") === -1) +
-      toggleRow("reunionMilestones", "Tell me at the milestones", "A quiet note at 100, 50, 30, 14, 7, 3 and 1 days — and on the day itself. Only when you know the exact date.", SPACE.notif.types.reunion !== false) +
+      toggleRow("reunionMilestones", "Tell me at the milestones", "A quiet note at 100, 50, 30, 14, 7, 3 and 1 days, and on the day — once you know the exact date.", SPACE.notif.types.reunion !== false) +
       '</div>' +
-      '<p class="privacy-note">A reunion can be a day, a month or just a year. Pairlum counts in whatever you actually know, and never pretends to more.</p>';
+      '<p class="privacy-note">Set a day, a month or just a year — Pairlum counts with whatever you know.</p>';
     document.getElementById("reunionSettingsEdit").addEventListener("click", function () {
       closeOverlay("reunionSettingsOverlay");
       openReunionEditor();
@@ -10281,7 +10281,7 @@
         '<p class="body-m">Since ' + escapeHtml(longDate(m.since)) + '. One membership covers this whole space — you and ' + escapeHtml(p.name) + '.</p></div>';
     } else {
       html += '<div class="plan-now"><p class="eyebrow">Your plan</p><p class="plan-now-name">First Chapter</p>' +
-        '<p class="body-m">Free to start. Everything you\'ve made stays yours. Membership is how the two of you keep adding to it.</p></div>';
+        '<p class="body-m">Free to start. Everything you make stays yours; membership lets you keep adding.</p></div>';
     }
     if (book) {
       html += '<div class="book-progress"><p class="eyebrow">Your Pairlum Book</p>' +
@@ -10289,7 +10289,7 @@
           ? '<p class="body-l" style="color:var(--ink)">Your year is complete — your Book can be made.</p>'
           : '<p class="body-l" style="color:var(--ink)">Opens on ' + escapeHtml(longDate(book.date)) + ' — ' + book.daysLeft + (book.daysLeft === 1 ? " day" : " days") + ' to go.</p>') +
         '<div class="book-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + book.pct + '"><i style="width:' + book.pct + '%"></i></div>' +
-        '<p class="body-s">The Book opens after one full year on this plan. It has nothing to do with how many memories you keep.</p></div>';
+        '<p class="body-s">The Book opens after one full year on this plan, however many memories you keep.</p></div>';
     }
     html += '</div><div class="overlay-section"><div class="overlay-section-head"><h4>The two plans</h4></div><div class="plan-grid">';
     planList().forEach(function (pl) {
@@ -10310,8 +10310,8 @@
       // No payments yet: say so plainly, and never switch a plan without one.
       html += '<div class="overlay-section"><div class="overlay-section-head"><h4>Membership opens soon</h4></div>' +
         (serverPlanState().known === false
-          ? '<p class="body-s">We couldn\'t check your plan just now. It\'ll show here once Pairlum can reach the server again.</p>'
-          : '<p class="body-s">Payments aren\'t open yet, so plans can\'t be bought here today. Nothing is charged and nothing changes until they are. You\'ll keep everything you\'ve made.</p>') +
+          ? '<p class="body-s">Couldn\'t check your plan just now. It\'ll show once Pairlum reaches the server.</p>'
+          : '<p class="body-s">Payments aren\'t open yet, so nothing can be bought or charged. You\'ll keep everything you\'ve made.</p>') +
         '</div>';
     } else {
       html += '<div class="overlay-section"><div class="overlay-section-head"><h4>Preview only</h4></div>' +
@@ -10526,7 +10526,7 @@
       '<div class="overlay-section-head"><h4>Animations</h4></div>' +
       chipRow("perfMotion", [["auto", "Auto"], ["calm", "Calm"], ["full", "Full"]], level) +
       '<p class="field-hint" id="perfMotionHint"></p>' +
-      toggleRow("perfReduced", "Reduced motion", "Stops movement almost everywhere. Petals and animations rest while this is on.", document.body.classList.contains("reduced-motion")) +
+      toggleRow("perfReduced", "Reduced motion", "Stops almost all movement, petals and animations included.", document.body.classList.contains("reduced-motion")) +
       toggleRow("perfPetals", "Falling petals", "Soft petals drifting behind the page.", SPACE.petals !== false) +
       toggleRow("perfTap", "Tap feedback", "A soft ring and a tiny vibration when you tap.", SPACE.tapFeedback !== false) +
       '</div>' +
@@ -10534,12 +10534,14 @@
       '<div class="overlay-section-head"><h4>Photos you bring in</h4></div>' +
       chipRow("perfQuality", [["high", "Sharpest"], ["balanced", "Balanced"], ["saver", "Smallest"]], SPACE.perf.photoQuality) +
       '<p class="field-hint" id="perfQualityHint"></p>' +
-      toggleRow("perfOriginals", "Keep the original files too", "Each imported photo is saved as the resized copy above. With this on, the untouched file is kept beside it and goes into your export. It takes more room.", keepOriginalsOn()) +
+      toggleRow("perfOriginals", "Keep the original files too", "Imported photos are saved resized. With this on, the untouched file is kept too and goes into your export. Takes more room.", keepOriginalsOn()) +
       '</div>' +
       '<div class="overlay-section">' +
       '<div class="overlay-section-head"><h4>Space on this device</h4></div>' +
       '<p class="body-m" id="perfStorage">Checking…</p>' +
-      '<p class="field-hint">Photos, videos and voice notes you add are kept on this device in this preview. To clear them, use Delete my account in Privacy.</p>' +
+      '<p class="field-hint">' + (isRealBackend()
+        ? 'A copy of your photos, videos and voice notes is kept here. Logging out clears it.'
+        : 'Photos, videos and voice notes you add are kept on this device in this preview. To clear them, use Delete my account in Privacy.') + '</p>' +
       '</div>';
     var paintHints = function () {
       var lv = SPACE.motionLevel === "full" || SPACE.motionLevel === "calm" ? SPACE.motionLevel : "auto";
@@ -10585,7 +10587,7 @@
       '<div class="danger-row"><div class="copy"><span class="title">What reaches you, and when</span><span class="sub">Notifications and quiet hours.</span></div><button class="btn-ghost" type="button" id="aboutNotif">Open →</button></div>' +
       '<div class="danger-row"><div class="copy"><span class="title">Your plan and your Book</span><span class="sub">Membership, and when the printed Book opens.</span></div><button class="btn-ghost" type="button" id="aboutMembership">Open →</button></div>' +
       '</div>' +
-      '<p class="privacy-note">Pairlum v1 — a private space for two. This is a preview build: everything you add is kept in this browser, and two tabs stand in for your two phones.</p>';
+      '<p class="privacy-note">Pairlum v1 — a private space for two.' + (isRealBackend() ? '' : ' This is a preview build: everything you add is kept in this browser, and two tabs stand in for your two phones.') + '</p>';
     document.getElementById("aboutPrivacy").addEventListener("click", function () { switchOverlay("aboutOverlay", "privacyOverlay", renderPrivacyMain); });
     document.getElementById("aboutNotif").addEventListener("click", function () { switchOverlay("aboutOverlay", "notifOverlay", renderNotifOverlay); });
     document.getElementById("aboutMembership").addEventListener("click", function () { switchOverlay("aboutOverlay", "membershipOverlay", renderMembershipOverlay); });
@@ -10784,7 +10786,7 @@
     if (quiet) html += '<p class="inbox-quiet">Quiet hours are on until ' + escapeHtml(clockLabel(SPACE.quietHours.end)) + '. Anything new waits here without a sound. “I Need You” still comes through.</p>';
     if (!INBOX.length) {
       html += '<div class="inbox-empty">' + emptyArt("timeline") + '<p class="body-l" style="color:var(--ink)">Nothing new just now.</p>' +
-        '<p class="body-s">When ' + escapeHtml(p.name) + ' shares, writes or plans something, it lands here. No streaks, no reminders to come back.</p></div>';
+        '<p class="body-s">When ' + escapeHtml(p.name) + ' shares, writes or plans something, it lands here.</p></div>';
     } else {
       var startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
       var group = function (title, items) {
@@ -10835,20 +10837,20 @@
     var canDevice = "Notification" in window;
     var deviceSub = !canDevice ? "This browser can't show device notifications."
       : Notification.permission === "denied" ? "Blocked in this browser. Allow notifications for this page in the browser's site settings, then switch this on."
-        : "A notification from this device when Pairlum is open in the background.";
+        : "Notifications while Pairlum is in the background.";
     var html =
       '<p class="inbox-quiet" id="notifQuietLine"' + (isQuietNow() ? "" : " hidden") + '>Quiet hours are on right now, until ' + escapeHtml(clockLabel(qh.end)) + '. New things wait silently in the bell.</p>' +
       '<div class="overlay-section">' +
       '<div class="overlay-section-head"><h4>How it reaches you</h4></div>' +
-      toggleRow("notifBanners", "Messages on screen", "The small line at the bottom when something arrives while you're here.", nf.banners !== false) +
+      toggleRow("notifBanners", "Messages on screen", "A small line at the bottom when something arrives.", nf.banners !== false) +
       toggleRow("notifSound", "Sound", "A soft two-note chime when something new arrives.", SPACE.sound) +
       toggleRow("notifDevice", "Device notifications", deviceSub, !!nf.device && canDevice && Notification.permission === "granted") +
-      toggleRow("notifPreviews", "Show the words", "Off: a device notification only says something is new from " + escapeHtml(p.name) + " — nothing to read on a locked screen.", nf.previews !== false) +
+      toggleRow("notifPreviews", "Show the words", "Off: notifications only say something is new from " + escapeHtml(p.name) + ".", nf.previews !== false) +
       '<div class="confirm-actions"><button type="button" class="btn-ghost" id="notifTest">Send myself a test</button></div>' +
       '</div>' +
       '<div class="overlay-section">' +
       '<div class="overlay-section-head"><h4>What you hear about</h4></div>' +
-      '<div class="toggle-row"><div class="toggle-row-copy"><span class="title">I Need You</span><span class="sub">When ' + escapeHtml(p.name) + ' says they could use you. It always reaches your bell. It only breaks into your quiet hours when ' + escapeHtml(p.name) + ' marks it as “can\'t wait”.</span></div><span class="privacy-tag privacy-tag--shared">Always on</span></div>' +
+      '<div class="toggle-row"><div class="toggle-row-copy"><span class="title">I Need You</span><span class="sub">When ' + escapeHtml(p.name) + ' could use you. Always reaches your bell, and breaks quiet hours only when marked “can\'t wait”.</span></div><span class="privacy-tag privacy-tag--shared">Always on</span></div>' +
       NOTIF_TYPES.map(function (t) { return toggleRow("notifType-" + t[0], t[1], t[2], nf.types[t[0]] !== false); }).join("") +
       '</div>' +
       '<div class="overlay-section">' +
@@ -10857,9 +10859,9 @@
       '<div class="toggle-time-row" id="qhTimeRow" style="' + (qh.enabled ? "" : "opacity:.4;pointer-events:none") + '">' +
       '<input type="time" id="qhStart" aria-label="Quiet hours start" value="' + escapeHtml(qh.start) + '"> <span>to</span> <input type="time" id="qhEnd" aria-label="Quiet hours end" value="' + escapeHtml(qh.end) + '">' +
       '</div>' +
-      '<p class="field-hint">' + escapeHtml(p.name) + ' sets their own quiet hours on their side. What you send while they rest waits silently in their bell until their quiet hours end.</p>' +
+      '<p class="field-hint">' + escapeHtml(p.name) + ' sets their own quiet hours. What you send then waits silently in their bell.</p>' +
       '</div>' +
-      '<p class="privacy-note">Pairlum never sends notifications built to create pressure — no "' + escapeHtml(p.name) + ' is waiting", no unread reminders, no streaks. “I Need You” always reaches your bell, and breaks into quiet hours only when it is marked “can\'t wait”.</p>';
+      '<p class="privacy-note">Pairlum never sends pressure notifications — no "' + escapeHtml(p.name) + ' is waiting", no unread reminders, no streaks.</p>';
     body.innerHTML = html;
 
     var save = function () { saveSpaceSettings(); syncSettingsChevs(); };
@@ -11011,7 +11013,7 @@
       '<input id="customNick" type="text" maxlength="18" placeholder="' + escapeHtml(p.realName) + '" value="' + escapeHtml(c.nick || "") + '">' +
       '<button type="submit">Save</button>' +
       '</form>' +
-      '<p class="field-hint">Pairlum uses it everywhere on your side — “' + escapeHtml(c.nick || "Love") + ' shared a moment”. Leave it empty to use ' + escapeHtml(p.realName) + '. They never see what you typed here.</p>' +
+      '<p class="field-hint">Used everywhere on your side — “' + escapeHtml(c.nick || "Love") + ' shared a moment”. Leave empty to use ' + escapeHtml(p.realName) + '. They never see it.</p>' +
       '</div>' +
       '<div class="overlay-section">' +
       '<div class="overlay-section-head"><h4>Time &amp; distance</h4></div>' +
@@ -11020,11 +11022,11 @@
       '</div>' +
       '<div class="overlay-section">' +
       '<div class="overlay-section-head"><h4>Your Home screen</h4></div>' +
-      '<p class="field-hint" style="margin-top:0">Switch a card off to hide it, or use the arrows to move it. Nothing is deleted, and ' + escapeHtml(p.name) + ' still sees everything on their side.</p>' +
+      '<p class="field-hint" style="margin-top:0">Switch a card off to hide it, or use the arrows to move it. Nothing is deleted, and ' + escapeHtml(p.name) + ' still sees everything.</p>' +
       '<div id="customHomeList"></div>' +
       '</div>' +
       '<div class="overlay-section">' +
-      '<div class="danger-row"><div class="copy"><span class="title">Start over</span><span class="sub">Puts text, spacing, clocks, distance and your Home screen back the way they came. Your mood and your name for ' + escapeHtml(p.realName) + ' stay.</span></div><button class="btn-ghost" type="button" id="customReset">Reset</button></div>' +
+      '<div class="danger-row"><div class="copy"><span class="title">Start over</span><span class="sub">Resets text, spacing, clocks, distance and your Home screen. Your mood and your name for ' + escapeHtml(p.realName) + ' stay.</span></div><button class="btn-ghost" type="button" id="customReset">Reset</button></div>' +
       '</div>';
     renderHomeCardList();
 
@@ -11176,9 +11178,9 @@
   }
   function dnaLine() {
     var p = SPACE.partner.name, me = dnaPerson(ME), th = dnaPerson(THEM);
-    if (!me.set && !th.set) return "Tell Pairlum how the two of you move. It takes a minute, and it's only ever yours.";
-    if (!th.set) return "Your side is in. When " + p + " adds theirs, you'll see the two of you side by side.";
-    if (!me.set) return p + " has filled in their side. Add yours to see the two of you together.";
+    if (!me.set && !th.set) return "Tell Pairlum how you two move — it takes a minute.";
+    if (!th.set) return "Your side is in. You'll see both once " + p + " adds theirs.";
+    if (!me.set) return p + " has filled in their side. Add yours to see both.";
     var avg = function (k) { return (me.specs[k] + th.specs[k]) / 2; }, bits = [];
     bits.push(avg("social") > 55 ? "happiest out in the world" : "quiet and close");
     bits.push(avg("plan") > 55 ? "planning ahead" : "saying yes on a whim");
@@ -11260,8 +11262,8 @@
       var sug = dnaSuggestion();
       html += '<div class="dna-suggest"><p class="eyebrow">An idea for today</p>' +
         (sug ? '<p>' + escapeHtml(sug.line) + '</p><button type="button" class="ambient-link" id="dnaPlanSuggestion">Make it a plan</button>'
-          : '<p>Add a few things you both love. Pairlum turns them into one small idea a day, the same for both of you.</p>') + '</div>';
-      html += '<div class="dna-block"><h3>Our things</h3><p class="field-hint" style="margin-top:0">Either of you can add or take away. Tap one to remove it.</p>';
+          : '<p>Add a few things you both love, and Pairlum suggests one small idea a day for you both.</p>') + '</div>';
+      html += '<div class="dna-block"><h3>Our things</h3><p class="field-hint" style="margin-top:0">Either of you can add one. Tap one to remove it.</p>';
       DNA_THINGS.forEach(function (cat) {
         html += '<div class="dna-cat"><h4>' + cat[0] + '</h4>' + chipList(d.things[cat[0]] || [], 'data-dna-remove-thing="' + escapeHtml(cat[0]) + '"') +
           addForm("thing", 'data-cat="' + escapeHtml(cat[0]) + '"', "Add to " + cat[0].toLowerCase(), "Add to " + cat[0]) + '</div>';
@@ -11278,7 +11280,7 @@
         '<input type="text" maxlength="60" placeholder="How you always sign off" aria-label="Usual goodbye" value="' + escapeHtml(d.language.goodbye) + '"><button type="submit">Save</button></form></div></div>';
     }
     if (t === "world") {
-      html += '<div class="dna-block"><h3>What matters most right now</h3><p class="field-hint" style="margin-top:0">Pick up to five, in the order they matter. This is shared — it\'s what your world is built around.</p><div class="dna-chips">' +
+      html += '<div class="dna-block"><h3>What matters most right now</h3><p class="field-hint" style="margin-top:0">Pick up to five, in order. Shared by you both.</p><div class="dna-chips">' +
         DNA_WORLD.map(function (w) {
           var i = d.priorities.indexOf(w[0]), on = i > -1;
           return '<button type="button" class="dna-chip' + (on ? " is-on" : "") + '" aria-pressed="' + (on ? "true" : "false") + '" data-dna-world="' + escapeHtml(w[0]) + '">' + (on ? '<b>' + (i + 1) + '</b>' : "") + escapeHtml(w[0]) + '</button>';
@@ -11291,12 +11293,12 @@
           var w = DNA_WORLD.filter(function (x) { return x[0] === name; })[0], cards = w ? w[1] : [];
           return '<li><span>' + escapeHtml(name) + '</span><small>' + (cards.length ? escapeHtml(cards.map(homeCardLabel).join(" · ")) : "Lives in its own Letters tab") + '</small></li>';
         }).join("") + '</ol><div class="confirm-actions"><button type="button" class="btn-primary" id="dnaApplyWorld">Arrange my Home this way</button></div>' +
-          '<p class="field-hint">Moves those cards to the top of your own Home screen. ' + escapeHtml(p) + ' chooses for theirs. You can fine-tune it in Customize.</p>';
+          '<p class="field-hint">Moves those cards to the top of your Home. ' + escapeHtml(p) + ' chooses for theirs; fine-tune it in Customize.</p>';
       }
       html += '</div>';
     }
     if (t === "rituals") {
-      html += '<div class="dna-block"><h3>Our rituals</h3><p class="field-hint" style="margin-top:0">Name them yourselves. No streaks, nothing to keep up — just a record of the times you did.</p>';
+      html += '<div class="dna-block"><h3>Our rituals</h3><p class="field-hint" style="margin-top:0">Name them yourselves. No streaks — just a record of the times you did them.</p>';
       html += d.rituals.length ? '<ul class="dna-rows">' + d.rituals.map(function (r) {
         var meta = r.freq + (r.count ? " · " + r.count + (r.count === 1 ? " time" : " times") + " · last " + agoLabel(r.last) : " · not yet");
         return '<li><div class="dna-row-copy"><span class="title">' + escapeHtml(r.name) + '</span><span class="sub">' + escapeHtml(meta) + '</span></div>' +
@@ -11329,7 +11331,7 @@
       }
     }
     if (t === "learn") {
-      html += '<div class="dna-block"><h3>More of this, less of that</h3><p class="field-hint" style="margin-top:0">Your taps and ' + escapeHtml(p) + '\'s are added together. They shape the date ideas on Home for both of you: what you lean away from stops coming up, what you lean toward comes first.</p>';
+      html += '<div class="dna-block"><h3>More of this, less of that</h3><p class="field-hint" style="margin-top:0">Your taps and ' + escapeHtml(p) + '\'s together shape the date ideas on Home: more of what you like, less of what you don\'t.</p>';
       DNA_LEARN.forEach(function (it) {
         var mine = me.fb[it[0]] || 0, theirs = th.fb[it[0]] || 0, pct = Math.max(6, Math.min(100, 50 + (mine + theirs) * 9));
         var word = function (v) { return v > 0 ? "more" : v < 0 ? "less" : "no lean"; };
@@ -11342,7 +11344,7 @@
     }
     if (t === "season") {
       var note = (DNA_SEASONS.filter(function (s) { return s[0] === d.season; })[0] || [])[1];
-      html += '<div class="dna-block"><h3>What life feels like right now</h3><p class="field-hint" style="margin-top:0">One for the two of you. Either of you can change it, as often as life does.</p><div class="dna-seasons">' +
+      html += '<div class="dna-block"><h3>What life feels like right now</h3><p class="field-hint" style="margin-top:0">One for you both. Either of you can change it any time.</p><div class="dna-seasons">' +
         DNA_SEASONS.map(function (s) {
           var on = s[0] === d.season;
           return '<button type="button" class="dna-season' + (on ? " is-on" : "") + '" aria-pressed="' + (on ? "true" : "false") + '" data-season="' + escapeHtml(s[0]) + '">' + escapeHtml(s[0]) + '</button>';
@@ -11843,11 +11845,11 @@
   function firstTips() {
     var p = SPACE.partner.name;
     return [
-      { k: "thinking", at: ".thinking-quick-row", mode: "before", title: "The smallest hello", text: "One tap tells " + p + " you're thinking of them. No words, no reply needed." },
-      { k: "dq", at: "#dqFlip", mode: "before", title: "Try today's question", text: "Answer first, then you both see each other's answer at the same time." },
-      { k: "parallel", at: "#parallelShare", mode: "before", title: "Show where you are, right now", text: "Share a photo of this moment and it sits beside " + p + "'s, side by side." },
+      { k: "thinking", at: ".thinking-quick-row", mode: "before", title: "The smallest hello", text: "One tap tells " + p + " you're thinking of them." },
+      { k: "dq", at: "#dqFlip", mode: "before", title: "Try today's question", text: "Answer first, then see each other's answers together." },
+      { k: "parallel", at: "#parallelShare", mode: "before", title: "Show where you are, right now", text: "Share a photo of this moment, beside " + p + "'s." },
       { k: "letter", at: "#view-letters [data-action='open-letter']", mode: "before", title: "Write the first letter", text: "Seal one to open tonight, or on a day that matters. " + p + " can't peek early." },
-      { k: "chapter", at: "#storyScrubber", mode: "before", title: "Name your chapters", text: "Chapters are the seasons of your story. Add one and your memories file themselves under it." },
+      { k: "chapter", at: "#storyScrubber", mode: "before", title: "Name your chapters", text: "Chapters are the seasons of your story. Memories file themselves under each one." },
       { k: "dna", at: "#dnaCard", mode: "before", title: "Say how you two move", text: "A minute of sliders and words, and Pairlum starts to sound like you." }
     ];
   }
