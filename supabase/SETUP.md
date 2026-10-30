@@ -254,11 +254,14 @@ mobile networks need a **TURN relay**: get one from a TURN provider and add
 it as `iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls:
 "turn:…", username: "…", credential: "…" }]` in `pairlum-config.js`.
 
-## Deploying (Netlify)
+## Deploying (Vercel or Netlify)
 
-Upload the project folder as-is — there's no build step. The `_headers` file
-at the root is picked up by Netlify automatically and adds security headers
-a page can't set for itself (no framing by other sites, HTTPS-only, camera
-and microphone limited to Pairlum). After deploying, add the live address to
+Upload the project folder as-is — there's no build step. The same security
+headers a page can't set for itself (no framing by other sites, HTTPS-only,
+camera and microphone limited to Pairlum) are in `vercel.json` for Vercel
+and in `_headers` for Netlify; each host reads its own file. Keep the two in
+step if you change one. On Vercel, import the repo with the "Other"
+framework preset and no build command; `.vercelignore` keeps `tests/` and
+`supabase/` off the site. After deploying, add the live address to
 Supabase's Site URL and Redirect URLs (section 7) and to the Google OAuth
 client's origins (section 6).

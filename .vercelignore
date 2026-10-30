@@ -1,0 +1,4 @@
+# Not part of the website: kept in the repo, never served by Vercel.
+tests/
+supabase/
+_headers
