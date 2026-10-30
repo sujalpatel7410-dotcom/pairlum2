@@ -381,6 +381,11 @@
             submitBtn.disabled = false;
             showError('Something went wrong reaching the server. Please try again.');
           });
+        } else if (cfg.supabaseUrl && cfg.supabaseAnonKey) {
+          // Real accounts are set up but the Supabase library didn't load
+          // (offline, blocked): never fall back to the demo's sample space.
+          submitBtn.disabled = false;
+          showError('Something went wrong reaching the server. Please try again.');
         } else {
           // No backend configured yet: a local, device-only demo session.
           PL.auth.setSession({ email: email, at: Date.now(), demo: true });

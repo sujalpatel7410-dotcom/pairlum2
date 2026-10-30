@@ -76,8 +76,9 @@
         var q = /(?:^|[?&])demo=([a-z]+)/.exec(location.search), s = window.sessionStorage;
         // Never in a real account: the demo writes its own couple's year into
         // this browser's copy of the space, which would then be saved.
+        // (Checked on the settings alone, so a blocked Supabase library can't let it in.)
         var cfg = window.PAIRLUM_CONFIG || {};
-        if (cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase && window.supabase.createClient) { s.removeItem("pairlum-demo"); return; }
+        if (cfg.supabaseUrl && cfg.supabaseAnonKey) { s.removeItem("pairlum-demo"); return; }
         if (q) { if (q[1] === "year") s.setItem("pairlum-demo", "year"); else s.removeItem("pairlum-demo"); }
         if (s.getItem("pairlum-demo") === "year") document.write('<script src="demo-year.js"><\/script>');
       } catch (e) { }
@@ -90,6 +91,20 @@
     rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="book.css">
+  <style>
+    /* Until app.js has drawn this account's own space, #app is only the
+       template (sample names and cards): keep it hidden, but laid out so
+       app.js can still measure it, and show a quiet loading screen instead. */
+    html.pl-booting #app { visibility: hidden }
+    .boot-screen { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; text-align: center }
+    html:not(.pl-booting) .boot-screen { display: none }
+    .boot-mark { margin: 0; font-family: var(--font-display); font-size: 2rem; letter-spacing: -.02em; color: var(--ink); animation: boot-breathe 2.4s ease-in-out infinite }
+    .boot-msg { margin: 0; font-family: var(--font-ui); font-size: .9rem; color: var(--ink-faint); max-width: 32ch }
+    .boot-retry { margin-top: 6px; padding: 10px 22px; border-radius: 99px; border: 1px solid currentColor; background: none; color: var(--ink); font-family: var(--font-ui); cursor: pointer }
+    @keyframes boot-breathe { 50% { opacity: .45 } }
+    @media (prefers-reduced-motion: reduce) { .boot-mark { animation: none } }
+  </style>
+  <script>document.documentElement.classList.add("pl-booting");</script>
 
   <script src="pairlum-backend.js"></script>
   <script src="pairlum-sync.js"></script>
@@ -125,6 +140,12 @@
   <!-- Soft petals drifting behind everything. Decoration only: hidden from screen readers, never catches a tap. -->
   <div class="atmos" aria-hidden="true"><i></i><i></i></div>
   <div class="petals" id="petals" aria-hidden="true" hidden></div>
+
+  <div class="boot-screen" id="bootScreen" role="status" aria-live="polite">
+    <p class="boot-mark">Pairlum</p>
+    <p class="boot-msg" id="bootMsg">Opening your space…</p>
+    <button type="button" class="boot-retry" id="bootRetry" hidden>Try again</button>
+  </div>
 
   <div class="app" id="app">
 
@@ -1822,6 +1843,19 @@
           document.body.appendChild(s);
         });
       }
+      function ready() { document.documentElement.classList.remove("pl-booting"); }
+      // The template stays hidden on failure: only the message and a retry show.
+      function fail() {
+        var retry = document.getElementById("bootRetry");
+        document.getElementById("bootMsg").textContent = "Couldn’t reach Pairlum’s server. Check your connection and try again.";
+        retry.hidden = false;
+        retry.onclick = function () { location.reload(); };
+      }
+      // This build has real accounts: if the Supabase library didn't load
+      // (offline, blocked), say so rather than falling back to the sample
+      // couple's demo space.
+      var cfg = window.PAIRLUM_CONFIG || {};
+      if (cfg.supabaseUrl && cfg.supabaseAnonKey && !window.PairlumSpace.isConfigured()) { fail(); return; }
       window.PairlumSync.boot().then(function () {
         return loadScript("book.js");
       }).then(function () {
@@ -1833,15 +1867,18 @@
         // asynchronous, unlike the static <script> tags this replaces) — a
         // listener added after the fact never otherwise runs, so fire it again
         // for any listener that's still waiting.
+        // Either way, app.js has drawn the real space once its listener has run.
         if (document.readyState !== "loading") {
           document.dispatchEvent(new Event("DOMContentLoaded", { bubbles: true, cancelable: true }));
+          ready();
+        } else {
+          document.addEventListener("DOMContentLoaded", ready);
         }
       }).catch(function (err) {
         // boot() already redirected to auth.html on "no session" — anything
         // else means the backend is unreachable; say so instead of a blank page.
         if (err && err.message === "no session") return;
-        document.body.insertAdjacentHTML("afterbegin",
-          '<div style="padding:40px;font:16px/1.5 system-ui">Couldn\'t reach Pairlum\'s server. Check your connection and reload.</div>');
+        fail();
         console.error(err);
       });
     })();
