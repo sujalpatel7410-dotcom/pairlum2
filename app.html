@@ -76,8 +76,9 @@
         var q = /(?:^|[?&])demo=([a-z]+)/.exec(location.search), s = window.sessionStorage;
         // Never in a real account: the demo writes its own couple's year into
         // this browser's copy of the space, which would then be saved.
+        // (Checked on the settings alone, so a blocked Supabase library can't let it in.)
         var cfg = window.PAIRLUM_CONFIG || {};
-        if (cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase && window.supabase.createClient) { s.removeItem("pairlum-demo"); return; }
+        if (cfg.supabaseUrl && cfg.supabaseAnonKey) { s.removeItem("pairlum-demo"); return; }
         if (q) { if (q[1] === "year") s.setItem("pairlum-demo", "year"); else s.removeItem("pairlum-demo"); }
         if (s.getItem("pairlum-demo") === "year") document.write('<script src="demo-year.js"><\/script>');
       } catch (e) { }
@@ -90,6 +91,20 @@
     rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="book.css">
+  <style>
+    /* Until app.js has drawn this account's own space, #app is only the
+       template (sample names and cards): keep it hidden, but laid out so
+       app.js can still measure it, and show a quiet loading screen instead. */
+    html.pl-booting #app { visibility: hidden }
+    .boot-screen { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; text-align: center }
+    html:not(.pl-booting) .boot-screen { display: none }
+    .boot-mark { margin: 0; font-family: var(--font-display); font-size: 2rem; letter-spacing: -.02em; color: var(--ink); animation: boot-breathe 2.4s ease-in-out infinite }
+    .boot-msg { margin: 0; font-family: var(--font-ui); font-size: .9rem; color: var(--ink-faint); max-width: 32ch }
+    .boot-retry { margin-top: 6px; padding: 10px 22px; border-radius: 99px; border: 1px solid currentColor; background: none; color: var(--ink); font-family: var(--font-ui); cursor: pointer }
+    @keyframes boot-breathe { 50% { opacity: .45 } }
+    @media (prefers-reduced-motion: reduce) { .boot-mark { animation: none } }
+  </style>
+  <script>document.documentElement.classList.add("pl-booting");</script>
 
   <script src="pairlum-backend.js"></script>
   <script src="pairlum-sync.js"></script>
@@ -125,6 +140,12 @@
   <!-- Soft petals drifting behind everything. Decoration only: hidden from screen readers, never catches a tap. -->
   <div class="atmos" aria-hidden="true"><i></i><i></i></div>
   <div class="petals" id="petals" aria-hidden="true" hidden></div>
+
+  <div class="boot-screen" id="bootScreen" role="status" aria-live="polite">
+    <p class="boot-mark">Pairlum</p>
+    <p class="boot-msg" id="bootMsg">Opening your space…</p>
+    <button type="button" class="boot-retry" id="bootRetry" hidden>Try again</button>
+  </div>
 
   <div class="app" id="app">
 
@@ -255,8 +276,7 @@
           <div class="container">
             <div class="space-paused" id="spacePausedNotice" hidden>
               <p class="eyebrow">Shared Day is paused</p>
-              <p class="space-paused-text" id="spacePausedText">Connect with your partner to bring Shared Day back to
-                life.</p>
+              <p class="space-paused-text" id="spacePausedText">Connect with your partner to bring Shared Day back.</p>
               <button class="first-chapter-cta" type="button" data-action="open-pairing">Reconnect →</button>
               <button class="space-paused-join" type="button" data-action="open-pairing-join" hidden>Got a link from your partner? Join →</button>
             </div>
@@ -380,7 +400,7 @@
             <div data-home-card="thinking" class="container">
               <section class="section" style="padding-top:0">
                 <p class="eyebrow">Thinking of you</p>
-                <p class="body-s" style="margin-top:4px">Tap to say you're thinking of them. No words needed.</p>
+                <p class="body-s" style="margin-top:4px">Tap to say you're thinking of them.</p>
                 <div class="notes-row" id="notesRow" style="margin-top:14px">
                   <!-- rendered by app.js -->
                 </div>
@@ -395,8 +415,8 @@
                   </button>
                 </div>
                 <form class="note-compose" id="noteForm">
-                  <label class="visually-hidden" for="noteInput">Or add a little more, if you want to</label>
-                  <input id="noteInput" type="text" placeholder="Or add a few words, if you want to…" maxlength="120">
+                  <label class="visually-hidden" for="noteInput">Or add a few words</label>
+                  <input id="noteInput" type="text" placeholder="Or add a few words…" maxlength="120">
                   <button type="submit">Send</button>
                 </form>
               </section>
@@ -686,8 +706,7 @@
             <div class="hero" style="padding-bottom:10px">
               <p class="eyebrow" id="storySince">Since 12 March 2022</p>
               <h1 class="disp-1">Our Story.</h1>
-              <p class="body-l" style="margin-top:10px;max-width:52ch">Your shared days, memories, and milestones — all
-                in one place.</p>
+              <p class="body-l" style="margin-top:10px;max-width:52ch">Your shared days, memories and milestones in one place.</p>
               <p class="story-payoff-line" id="storyPayoffLine">This is where it adds up.</p>
             </div>
 
@@ -763,8 +782,7 @@
             <div class="hero" style="padding-bottom:10px">
               <p class="eyebrow">For later</p>
               <h1 class="disp-1">Letters.</h1>
-              <p class="body-l" style="margin-top:10px;max-width:50ch">Written now, opened when it's time. Some are
-                dated. Some just wait.</p>
+              <p class="body-l" style="margin-top:10px;max-width:50ch">Written now, opened when it's time.</p>
             </div>
 
             <section class="section" style="padding-top:10px">
@@ -880,12 +898,12 @@
                   <button class="link-more" style="border:none;background:none;cursor:pointer"
                     data-action="open-membership" id="bookTeaserBtn">How to get yours →</button>
                 </div>
-                <p class="body-m book-lede">After a full year on the Book membership, the days you kept become a printed
-                  Pairlum Book. This is yours so far — all 44 pages, cover to cover.</p>
+                <p class="body-m book-lede">After a full year on the Book membership, your days become a printed Pairlum
+                  Book. Here's yours so far.</p>
                 <p class="body-s book-status" id="bookStatusLine"></p>
                 <div id="bookViewer"></div>
-                <p class="body-s book-note">A preview made from what the two of you have kept. Pages you haven't filled
-                  yet show a sample line, marked “sample” beside the page number.</p>
+                <p class="body-s book-note">Made from what you two have kept. Unfilled pages show a line marked
+                  “sample”.</p>
               </section>
             </div>
 
@@ -1134,7 +1152,7 @@
           <!-- rendered by app.js from NEED_YOU data -->
         </div>
 
-        <label class="need-request-field-label" for="needRequestNote">Say a little more, if you want to</label>
+        <label class="need-request-field-label" for="needRequestNote">Say a little more</label>
         <textarea id="needRequestNote" class="need-request-note" placeholder="Optional — a line about what's going on…"
           maxlength="200"></textarea>
 
@@ -1186,7 +1204,7 @@
         </div>
         <audio id="comfortPreview" controls hidden style="width:100%;margin-top:14px"></audio>
         <div class="capture-footer">
-          <span class="body-s">Saved on this device first, then shown to them.</span>
+          <span class="body-s">Saved here first, then shown to them.</span>
           <button class="btn-primary" id="comfortSave" type="button" disabled>Save</button>
         </div>
       </div>
@@ -1249,7 +1267,7 @@
           </div>
           <label class="body-s" for="reunionPlaceInput">Where (optional)</label>
           <input type="text" class="imp-caption" id="reunionPlaceInput" maxlength="40" placeholder="e.g. Berlin">
-          <p class="body-s">Either of you can set or change this. The countdown updates for both.</p>
+          <p class="body-s">Either of you can change this; the countdown updates for both.</p>
           <p class="body-s imp-pick-note" id="reunionFormNote" role="status"></p>
           <div class="capture-footer">
             <button class="btn-ghost" id="reunionClear" type="button" hidden>Clear</button>
@@ -1321,8 +1339,7 @@
             </svg>
             <input type="date" id="chapterDateInput">
           </div>
-          <p class="ce-help" id="chapterRunsLine">It runs until your next chapter starts. Memories are filed under it by
-            their dates.</p>
+          <p class="ce-help" id="chapterRunsLine">It runs until your next chapter. Memories file under it by date.</p>
 
           <label class="ce-label" for="chapterNoteInput">A few words about it <span
               class="ce-opt">optional</span></label>
@@ -1414,19 +1431,17 @@
         <div class="import-step" data-step="1">
           <p class="eyebrow">Step 1 of 4</p>
           <h3 class="disp-3" style="margin-top:6px">Choose the photos and videos</h3>
-          <p class="body-m" style="margin-top:8px">Pick as many as you like, from any year. Pairlum reads the date each
-            one was taken and files it in the right place — you don't have to sort anything.</p>
+          <p class="body-m" style="margin-top:8px">Pick as many as you like, from any year. Pairlum files each one by
+            the date it was taken.</p>
           <input type="file" id="importFileInput" accept="image/*,video/*" multiple hidden>
           <div class="imp-sources">
             <button class="imp-source" id="importPickBtn" type="button">
               <span class="imp-source-title">From this phone or computer</span>
-              <span class="imp-source-sub">On iPhone this opens your Photos library, iCloud Photos included. On Android,
-                your gallery.</span>
+              <span class="imp-source-sub">Your Photos library (iCloud included) or Android gallery.</span>
             </button>
             <button class="imp-source" id="importGoogleBtn" type="button">
               <span class="imp-source-title">From Google Photos</span>
-              <span class="imp-source-sub">Sign in, choose the photos on Google's page, and they come straight
-                in.</span>
+              <span class="imp-source-sub">Choose photos on Google's page and they come straight in.</span>
             </button>
           </div>
           <p class="body-s imp-pick-note" id="importPickNote" role="status"></p>
@@ -1573,7 +1588,7 @@
           <h2 class="disp-3" id="appearanceTitle">Appearance</h2>
           <button class="sheet-close" type="button" data-close-overlay="appearanceOverlay" aria-label="Close">✕</button>
         </div>
-        <p class="body-s" style="margin:-6px 0 16px">Pick the mood for your space. It's saved on this device.</p>
+        <p class="body-s" style="margin:-6px 0 16px">Pick a mood. It's saved on this device.</p>
         <div class="mood-grid" id="moodGrid" role="radiogroup" aria-label="Mood">
           <button type="button" class="mood-option" data-mood-id="warm" role="radio" aria-checked="false">
             <span class="mood-swatch" aria-hidden="true"><i
@@ -1822,6 +1837,19 @@
           document.body.appendChild(s);
         });
       }
+      function ready() { document.documentElement.classList.remove("pl-booting"); }
+      // The template stays hidden on failure: only the message and a retry show.
+      function fail() {
+        var retry = document.getElementById("bootRetry");
+        document.getElementById("bootMsg").textContent = "Couldn’t reach Pairlum’s server. Check your connection and try again.";
+        retry.hidden = false;
+        retry.onclick = function () { location.reload(); };
+      }
+      // This build has real accounts: if the Supabase library didn't load
+      // (offline, blocked), say so rather than falling back to the sample
+      // couple's demo space.
+      var cfg = window.PAIRLUM_CONFIG || {};
+      if (cfg.supabaseUrl && cfg.supabaseAnonKey && !window.PairlumSpace.isConfigured()) { fail(); return; }
       window.PairlumSync.boot().then(function () {
         return loadScript("book.js");
       }).then(function () {
@@ -1833,15 +1861,18 @@
         // asynchronous, unlike the static <script> tags this replaces) — a
         // listener added after the fact never otherwise runs, so fire it again
         // for any listener that's still waiting.
+        // Either way, app.js has drawn the real space once its listener has run.
         if (document.readyState !== "loading") {
           document.dispatchEvent(new Event("DOMContentLoaded", { bubbles: true, cancelable: true }));
+          ready();
+        } else {
+          document.addEventListener("DOMContentLoaded", ready);
         }
       }).catch(function (err) {
         // boot() already redirected to auth.html on "no session" — anything
         // else means the backend is unreachable; say so instead of a blank page.
         if (err && err.message === "no session") return;
-        document.body.insertAdjacentHTML("afterbegin",
-          '<div style="padding:40px;font:16px/1.5 system-ui">Couldn\'t reach Pairlum\'s server. Check your connection and reload.</div>');
+        fail();
         console.error(err);
       });
     })();

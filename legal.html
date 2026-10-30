@@ -3,6 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Google tag (gtag.js), with consent: no analytics cookies until the visitor allows them -->
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}
+gtag('consent','default',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',analytics_storage:'denied',wait_for_update:500});
+try{if(localStorage.getItem('pl-analytics')==='yes')gtag('consent','update',{analytics_storage:'granted'})}catch(e){}
+gtag('js',new Date());gtag('config','G-N7FFW7ECL6');</script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N7FFW7ECL6"></script>
+<script src="consent.js" defer></script>
 <title>Privacy &amp; Terms — Pairlum</title>
 <meta name="description" content="Pairlum's privacy, terms and refund policy, in plain words and in full.">
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
@@ -13,8 +20,15 @@
 <link rel="stylesheet" href="pairlum-pages.css">
 <script src="pairlum-config.js?v=2"></script>
 <script src="pairlum-core.js"></script>
+<style>
+.legal-table{width:100%;border-collapse:collapse;margin:18px 0;font-size:.88rem}
+.legal-table caption{text-align:left;color:var(--muted);font-size:.85rem;padding-bottom:6px}
+.legal-table th,.legal-table td{text-align:left;vertical-align:top;padding:12px 10px 12px 0;border-bottom:1px solid color-mix(in srgb,var(--ink) 14%,transparent)}
+.legal-table th{font-weight:600}
+.legal-choice{margin-left:6px;padding:6px 14px;border-radius:999px;border:1px solid currentColor;background:transparent;color:inherit;font:inherit;cursor:pointer}
+</style>
 </head>
-<body>
+<body data-page="legal">
 <a class="skip" href="#main">Skip to content</a>
 <header class="pg-hdr">
   <a class="pl-wordmark" href="index.html">Pairlum</a>
@@ -33,6 +47,7 @@
     <li><a href="#privacy">Privacy policy</a></li>
     <li><a href="#terms">Terms of service</a></li>
     <li><a href="#refund">Refund policy</a></li>
+    <li><a href="#cookies">Cookies &amp; storage</a></li>
   </ul>
 
   <section class="legal-sec" id="plain">
@@ -40,6 +55,7 @@
     <p>Pairlum is a private space for two people. What you share — moments, notes, letters, photos, voice notes — is stored on Pairlum's servers so it reaches both your devices, and only the two of you can open it. It is never sold and never used for advertising.</p>
     <p>Your recordings are written up only if you switch that on for yourself (Settings → Privacy). Then your own voice notes and clips are sent to be transcribed and summarised; the words are kept, the sound is not. Your partner decides separately for theirs.</p>
     <p>Removing something keeps it in Recently Deleted for 30 days, in case you change your mind, and then clears it for good. Deleting your account removes your login and everything you added; what your partner added stays with them. You can export a full copy of your space at any time.</p>
+    <p>On the pairlum.com website, Google Analytics stores cookies only if you choose “Allow”, and you can change your mind at any time (see <a class="textlink" href="#cookies">Cookies &amp; storage</a>).</p>
   </section>
 
   <section class="legal-sec" id="privacy">
@@ -53,6 +69,8 @@
       <li>A short log of live listening (who listened, when and for how long). The sound itself is sent directly between your two devices and is never recorded or stored.</li>
       <li>Product counts with no content in them: which of a small, fixed list of things happened (for example "a space was created" or "the membership page was opened"), by whom, in which space and when — never what anyone wrote, said or shared. They help us understand whether Pairlum is working.</li>
       <li>If you choose to import from Google Photos, only the photos you pick.</li>
+      <li>On the pairlum.com website, only if you choose “Allow”: which pages were viewed and which buttons were used (for example, opening Pairlum), counted by Google Analytics with a random identifier. Google Analytics never receives your name, your email or anything in your space. See <a class="textlink" href="#cookies">Cookies &amp; storage</a>.</li>
+      <li>If you joined the early-access list before launch: the first name, email address and optional relationship category you entered, with the date, to send the launch updates you asked for. New early-access signups have closed; we delete these details when you ask.</li>
     </ul>
     <p><strong>Consent:</strong> by creating an account you agree to Pairlum handling the data above for these purposes. Optional features — write-ups, Google Photos import, live listening — each ask you first, and you can switch them off at any time. Switching something off stops it from then on.</p>
     <p><strong>Who can see it:</strong> only the two people in a space can see what is in it. We don't look at your space's contents. The people who run Pairlum can technically reach the database; we do so only to fix a problem you ask us to look at, to investigate abuse or a security issue, or when the law requires it.</p>
@@ -62,6 +80,8 @@
       <li>OpenAI — transcribing and summarising your recordings, only if you have switched write-ups on.</li>
       <li>Google — sign-in with Google and Google Photos import, only if you use them.</li>
       <li>A payment provider, once payments open. <span class="legal-todo">[provider — to be added]</span></li>
+      <li>Netlify — hosting the website, and keeping the early-access list from before launch. Like any host, it receives ordinary request details such as an IP address and browser type.</li>
+      <li>Google Analytics — counting visits to the website, only if you choose “Allow”. It is not used for advertising.</li>
     </ul>
     <p>Pairlum is not end-to-end encrypted: our servers can read what is stored so they can bring it to both your devices.</p>
     <p><strong>How long we keep it:</strong> what you add is kept while your account exists. Something you remove waits in Recently Deleted for 30 days and is then cleared for good, with its photo. When you delete your account, your login, your profile and everything you added — with your photos, clips, recordings and their write-ups — are deleted, and your pairing ends for both of you. What your partner added stays with them, and so do things you shared that belong to both of you, such as chapters. Product counts are kept but no longer linked to you. Copies inside our providers' backups are removed on their own schedule. <span class="legal-todo">[backup retention period — to be confirmed]</span></p>
@@ -90,9 +110,23 @@
     <p>Payments haven't opened yet. Once they do: if you change your mind, or something isn't working as described, write to <a class="textlink" href="mailto:pairlum.co@gmail.com">pairlum.co@gmail.com</a> within 7 days of your payment for a full refund, returned the way you paid.</p>
     <p>After 7 days, a membership isn't refundable for the rest of its year. Nothing renews automatically, so there is never anything to cancel to avoid a future charge.</p>
   </section>
+
+  <section class="legal-sec" id="cookies">
+    <h2>Cookies &amp; device storage</h2>
+    <p>The website uses your browser’s storage to remember your settings and to avoid asking the same thing twice. Local storage works much like a cookie. The website sets no advertising cookies.</p>
+    <p><strong>Google Analytics:</strong> its cookies (_ga and related) are set only if you choose “Allow”. If you choose “No thanks”, or haven’t chosen yet, no analytics cookies are set; Google may still receive a cookieless notice that a page was visited (such as the page address and browser type), with nothing stored on your device. <button type="button" class="legal-choice" data-confirm-analytics>Change analytics choice</button></p>
+    <table class="legal-table"><caption>Storage used by the website</caption><thead><tr><th scope="col">Purpose</th><th scope="col">What is stored</th><th scope="col">How long</th></tr></thead><tbody>
+      <tr><th scope="row">Your preferences</th><td>Sound and visual-quality settings on the front page, and whether you have seen the sound button.</td><td>Local storage, until cleared or changed.</td></tr>
+      <tr><th scope="row">Analytics choice</th><td>Whether you allowed or declined Google Analytics.</td><td>Local storage, until cleared or changed.</td></tr>
+      <tr><th scope="row">Google Analytics (only if allowed)</th><td>_ga cookies with a random identifier, used to count visits.</td><td>Up to 2 years, set by Google.</td></tr>
+    </tbody></table>
+    <p>Signing in and the Pairlum app keep their own storage on your device, to keep you signed in and your space working; the privacy policy above covers that.</p>
+    <p>You can clear or block site storage in your browser’s privacy settings; your saved preferences then reset. Clearing it does not delete your account or an early-access signup: write to <a class="textlink" href="mailto:pairlum.co@gmail.com?subject=Pairlum%20deletion%20request">pairlum.co@gmail.com</a> for that.</p>
+  </section>
 </main>
 
 <footer class="foot"><div class="pl-foot"><span class="pl-wordmark" style="font-size:.9rem">Pairlum</span><span class="sp"></span>
   <a href="pricing.html">Membership</a><a href="mailto:pairlum.co@gmail.com">Contact</a><span>For adults 18+</span></div></footer>
+<script src="site-extras.js" defer></script>
 </body>
 </html>
